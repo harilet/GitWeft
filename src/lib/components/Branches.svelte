@@ -191,12 +191,18 @@
             <button
               class="btn ghost sm"
               disabled={!currentBranch}
-              onclick={() =>
-                app.push(
-                  remote.name,
-                  currentBranch?.name ?? null,
-                  !trackedBy(remote.name),
-                )}>Push</button
+              onclick={async () => {
+                if (
+                  await confirm(
+                    `Push ${currentBranch?.name} to ${remote.name}?`,
+                  )
+                )
+                  app.push(
+                    remote.name,
+                    currentBranch?.name ?? null,
+                    !trackedBy(remote.name),
+                  );
+              }}>Push</button
             >
             <button
               class="btn ghost sm danger-text"

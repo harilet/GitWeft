@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirm } from "@tauri-apps/plugin-dialog";
   import { app, type ViewKey } from "$lib/store.svelte";
   import Welcome from "$lib/components/Welcome.svelte";
   import Changes from "$lib/components/Changes.svelte";
@@ -80,12 +81,19 @@
               <button
                 class="btn sm"
                 disabled={cannotPush}
-                onclick={() =>
-                  app.push(
-                    toolbarRemote,
-                    app.repo?.branch ?? null,
-                    !currentBranch?.upstream,
-                  )}>Push</button
+                onclick={async () => {
+                  const branch = app.repo?.branch ?? "current branch";
+                  if (
+                    await confirm(
+                      `Push ${branch} to ${toolbarRemote ?? "remote"}?`,
+                    )
+                  )
+                    app.push(
+                      toolbarRemote,
+                      app.repo?.branch ?? null,
+                      !currentBranch?.upstream,
+                    );
+                }}>Push</button
               >
             {/if}
             <button
