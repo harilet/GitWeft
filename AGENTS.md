@@ -23,7 +23,7 @@ npm run preview             # preview the frontend build
 npm run check               # svelte-kit sync + svelte-check (TS/Svelte diagnostics)
 npm run tauri build         # release desktop bundle (deb only)
 
-cd src-tauri && cargo test                 # 6 unit tests in git.rs
+cd src-tauri && cargo test                 # 15 unit tests in git.rs + ai.rs
 cd src-tauri && cargo clippy --all-targets # Rust lint
 cd src-tauri && cargo fmt --check          # Rust format check; use cargo fmt to write
 ```
@@ -33,7 +33,7 @@ Frontend validation is `npm run check`; Rust lint/format are the cargo commands.
 There is no CI workflow in the repo — run the checks manually.
 
 Last verified 2026-11-03: `npm run check` 0 errors/0 warnings; `npm run build` OK;
-`cargo test` 6 passed; `cargo clippy --all-targets` clean; `cargo fmt --check` clean.
+`cargo test` 15 passed; `cargo clippy --all-targets` clean; `cargo fmt --check` clean.
 
 ## Architecture map
 
@@ -46,6 +46,7 @@ Last verified 2026-11-03: `npm run check` 0 errors/0 warnings; `npm run build` O
 | `src/lib/store.svelte.ts` | `AppStore` + `RepoSession`: multi-repo state, refresh, all actions, recents, auto-fetch, progress listener. |
 | `src/lib/recents.ts` | Recent-project persistence (localStorage, pin/sort, max 30). |
 | `src/lib/settings.ts` | Accent presets, validation, persistence and CSS variables. |
+| `src/lib/ai.ts` | AI provider config, localStorage settings (app + repo overrides), read-only tool schemas/executors and the agent tool loop. |
 | `src/lib/format.ts` | Relative/absolute time formatting and unified-patch parser. |
 | `src/lib/actions.ts` | `autofocus` Svelte action. |
 | `src/lib/components/Welcome.svelte` | Start screen: recents, open/init/clone dialogs. |
@@ -57,16 +58,18 @@ Last verified 2026-11-03: `npm run check` 0 errors/0 warnings; `npm run build` O
 | `src/lib/components/BranchSwitcher.svelte` | Toolbar searchable local/remote branch switcher. |
 | `src/lib/components/Tags.svelte` | Tag list, create/delete. |
 | `src/lib/components/Stashes.svelte` | Stash list, create/apply/pop/drop. |
-| `src/lib/components/Settings.svelte` | Appearance (accent) and Git identity (local/global) dialogs. |
+| `src/lib/components/Settings.svelte` | Appearance, Git identity (local/global), AI provider/scope settings and error-log dialogs. |
+| `src/lib/components/AiPanel.svelte` | Read-only AI assistant drawer: chat, tool activity, commit-message generation/insert. |
 | `src/lib/components/DiffView.svelte` | Renders a parsed patch with line markers/numbers. |
 | `src/lib/components/Modal.svelte` | Shared modal shell, backdrop/Esc handling. |
 | `src/app.css` | Global theme and shared component styles. |
 | `src-tauri/src/git.rs` | All Git commands, data structs, network CLI runner, unit tests. |
+| `src-tauri/src/ai.rs` | Ollama/OpenAI chat and model-list bridge over `reqwest`; normalizes tool calls/messages; unit tests. |
 | `src-tauri/src/lib.rs` | Tauri builder, plugins and command registration. |
 | `src-tauri/src/main.rs` | Desktop binary entry point. |
 | `src-tauri/tauri.conf.json` | Window config (frameless), dev/build hooks, deb bundle. |
 | `src-tauri/capabilities/default.json` | Window, dialog and opener permissions. |
-| `src-tauri/Cargo.toml` | Rust deps (`git2` without default features) and release profile. |
+| `src-tauri/Cargo.toml` | Rust deps (`git2` without default features, `reqwest` for AI HTTP) and release profile. |
 | `README.md` / root `FEATURES.md` | Older overview/detailed feature list. `docs/FEATURES.md` is canonical for scope. |
 | `docs/FEATURES.md` / `docs/SCRATCH.md` | Living scope + rolling session memory. |
 
@@ -82,6 +85,7 @@ No database. The app persists only small client-side preferences:
 | `gitweft.recents` | JSON array of `{ path, name, pinned, lastOpened }`, max 30; reads legacy `gitman.recents` if absent. |
 | `gitweft.settings` | `{ accent: "#rrggbb" }`; invalid values fall back to `#7b8cff`. |
 | `gitweft.lastFetch` | Map of repository path -> timestamp used for the 5-minute auto-fetch throttle. |
+| `gitweft.ai` | `{ app: AiConfig, repos: { [path]: AiConfig } }`; provider, base URL, model, API key and temperature. Repo entries override app defaults. |
 
 Git identity lives in Git config (`user.name` / `user.email`), read via `git2`,
 written via system `git config --local` or `--global`.
@@ -109,6 +113,9 @@ log, branches, graph, remotes, tags, stashes and user config for one refresh.
   silent on failure.
 - **SPA only:** `ssr = false` plus the static adapter; there is no Node server.
 - **Commit identity:** use the configured signature; never invent an author.
+- **AI is read-only:** the assistant may inspect repository info, commits, branches,
+  status and diffs through tools, but must never stage, unstage, commit, discard,
+  checkout, push or otherwise write. Do not add write tools to `src/lib/ai.ts`.
 
 ## Gotchas
 
@@ -120,10 +127,13 @@ log, branches, graph, remotes, tags, stashes and user config for one refresh.
   permissions in `src-tauri/capabilities/default.json`; removing them breaks the UI.
 - Network operations fail without system `git` and configured credentials; local
   operations do not need network access.
+- AI requires a reachable Ollama server or an OpenAI-compatible endpoint and is
+  called from Rust via `reqwest`; settings (including API keys) live in
+  `localStorage` under `gitweft.ai`.
 - Tests are backend-only and create temporary repositories; run them from
   `src-tauri/`. There are no frontend tests.
-- `package.json` version is `0.1.0`; `src-tauri/tauri.conf.json` is being bumped to
-  `0.1.1` in the current working tree. Check the release version before packaging.
+- `package.json` version is `0.1.0`; `src-tauri/tauri.conf.json` is `0.1.2` in the
+  current working tree. Check the release version before packaging.
 - Do not edit generated directories (`build/`, `.svelte-kit/`, `src-tauri/gen/`,
   `src-tauri/target/`).
 

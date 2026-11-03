@@ -3,17 +3,16 @@
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { app } from "../store.svelte";
 
-  let message = $state("");
   let selected = $state<string | null>(null);
   let committing = $state(false);
 
   async function submitCommit() {
-    if (!message.trim() || app.staged.length === 0) return;
+    if (!app.commitMessage.trim() || app.staged.length === 0) return;
     committing = true;
-    const ok = await app.commit(message);
+    const ok = await app.commit(app.commitMessage);
     committing = false;
     if (ok) {
-      message = "";
+      app.commitMessage = "";
       selected = null;
     }
   }
@@ -68,11 +67,18 @@
   </section>
 
   <section class="commit-box">
-    <span class="label commit-label">Commit message</span>
+    <div class="commit-head">
+      <span class="label commit-label">Commit message</span>
+      <button
+        class="btn ghost sm"
+        title="Generate a commit message with AI"
+        onclick={() => app.openAi("commit")}>AI generate</button
+      >
+    </div>
     <textarea
       class="textarea"
       placeholder="Describe your changes…"
-      bind:value={message}
+      bind:value={app.commitMessage}
       onkeydown={(e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submitCommit();
       }}
@@ -80,7 +86,7 @@
     <div class="row">
       <button
         class="btn primary"
-        disabled={committing || !message.trim() || app.staged.length === 0}
+        disabled={committing || !app.commitMessage.trim() || app.staged.length === 0}
         onclick={submitCommit}
       >
         {committing ? "Committing…" : `Commit ${app.staged.length || ""}`}
@@ -219,6 +225,12 @@
   }
   .commit-label {
     display: block;
+  }
+  .commit-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
   .commit-box .textarea {
     min-height: 68px;

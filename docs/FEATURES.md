@@ -27,11 +27,16 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
 - [x] Persistent error log: toast errors and uncaught runtime errors are saved on
       device (max 200), viewable in Settings → Error log with copy-all and clear.
 
+- [x] Nav rail Branches count shows local/remote totals and the app version is
+      `0.1.2` (`src-tauri/tauri.conf.json`).
+- [x] AI assistant: Ollama and OpenAI providers with app-level and per-repository
+      settings, provider model discovery (installed Ollama models and OpenAI model
+      IDs), a read-only chat drawer, tools for repository info, commits, branches,
+      staged/unstaged diffs, and commit-message generation from the Changes view.
+
 ## In progress
 
-- [~] Uncommitted working-tree changes: nav Branches count shows local/remote
-      (`src/routes/+page.svelte`) and app version bumped to `0.1.1`
-      (`src-tauri/tauri.conf.json`).
+- [~] None currently.
 
 ## Ideas
 
@@ -48,3 +53,5 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
 - Bundling TLS/SSH in `git2`; network operations intentionally use system `git`.
 - Server-side rendering or a Node server; the frontend is a static SPA.
 - Inventing commit authors; commits use the configured Git signature.
+- AI write actions: the assistant may read repository state but never stages,
+  unstages, commits, discards, checks out or pushes.

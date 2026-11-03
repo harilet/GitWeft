@@ -23,9 +23,28 @@ import {
   persistErrors,
   type ErrorLogEntry,
 } from "./errorlog";
+import {
+  COMMIT_PROMPT,
+  isAiConfigured,
+  loadAiSettings,
+  normalizeCommitMessage,
+  persistAiSettings,
+  resolveAiConfig,
+  runAiAgent,
+  type AiConfig,
+  type AiMessage,
+  type AiSettings,
+} from "./ai";
 
 export type ViewKey = "changes" | "history" | "branches" | "tags" | "stashes";
-export type SettingsTab = "appearance" | "identity" | "errors";
+export type SettingsTab = "appearance" | "identity" | "ai" | "errors";
+export type AiMode = "chat" | "commit";
+
+export interface AiEntry {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+}
 
 export interface DiffTarget {
   title: string;
@@ -85,6 +104,17 @@ export class RepoSession {
   view = $state<ViewKey>("changes");
   diff = $state<DiffTarget | null>(null);
   selectedCommit = $state<CommitInfo | null>(null);
+
+  commitMessage = $state("");
+
+  aiOpen = $state(false);
+  aiMode = $state<AiMode>("chat");
+  aiEntries = $state<AiEntry[]>([]);
+  aiDraft = $state("");
+  aiRunning = $state(false);
+  aiStatus = $state<string | null>(null);
+  private aiHistory: AiMessage[] = [];
+  private aiEntrySeq = 0;
 
   busy = $state(false);
 
@@ -278,6 +308,90 @@ export class RepoSession {
     }
   }
 
+  openAi(mode: AiMode = "chat") {
+    if (mode === "commit" && !this.aiRunning) {
+      this.aiEntries = [];
+      this.aiHistory = [];
+      this.aiDraft = COMMIT_PROMPT;
+    }
+    this.aiOpen = true;
+    this.aiMode = mode;
+    this.aiStatus = null;
+    if (mode === "commit" && !this.aiDraft.trim()) {
+      this.aiDraft = COMMIT_PROMPT;
+    }
+  }
+
+  closeAi() {
+    this.aiOpen = false;
+    this.aiStatus = null;
+  }
+
+  resetAi() {
+    if (this.aiRunning) return;
+    this.aiEntries = [];
+    this.aiHistory = [];
+    this.aiDraft = "";
+    this.aiStatus = null;
+  }
+
+  async sendAi() {
+    const prompt = this.aiDraft.trim();
+    if (!prompt || this.aiRunning) return;
+
+    const config = this.app.aiConfig;
+    if (!isAiConfigured(config)) {
+      this.app.notify("Configure an AI provider in Settings → AI", "error");
+      this.app.openAiSettings();
+      return;
+    }
+
+    this.aiDraft = "";
+    this.aiRunning = true;
+    this.aiStatus = "Thinking…";
+    this.aiEntries = [
+      ...this.aiEntries,
+      { id: ++this.aiEntrySeq, role: "user", content: prompt },
+    ];
+
+    const history: AiMessage[] = [
+      ...this.aiHistory,
+      { role: "user", content: prompt },
+    ];
+    try {
+      const result = await runAiAgent(config, this.path, history, (status) => {
+        this.aiStatus = status;
+      });
+      this.aiHistory = result.history;
+      this.aiEntries = [
+        ...this.aiEntries,
+        {
+          id: ++this.aiEntrySeq,
+          role: "assistant",
+          content: result.text || "The model returned an empty response.",
+        },
+      ];
+    } catch (e) {
+      const text = typeof e === "string" ? e : String(e);
+      this.app.notify(text, "error");
+      this.aiEntries = [
+        ...this.aiEntries,
+        { id: ++this.aiEntrySeq, role: "assistant", content: `⚠ ${text}` },
+      ];
+    } finally {
+      this.aiRunning = false;
+      this.aiStatus = null;
+    }
+  }
+
+  useAiCommitMessage(text: string) {
+    const message = normalizeCommitMessage(text);
+    if (!message) return;
+    this.commitMessage = message;
+    this.aiOpen = false;
+    this.app.notify("Commit message inserted", "success");
+  }
+
   async stage(path: string) {
     await this.run(() => git.stageFile(this.path, path));
     await this.refreshStatus();
@@ -312,6 +426,7 @@ export class RepoSession {
       "Commit created",
     );
     if (oid) {
+      this.commitMessage = "";
       await this.refreshAll();
       return true;
     }
@@ -459,6 +574,7 @@ class AppStore {
   sessions = $state<RepoSession[]>([]);
   activeId = $state<string | null>(null);
   recents = $state<RecentProject[]>(sortRecents(loadRecents()));
+  aiSettings = $state<AiSettings>(loadAiSettings());
 
   settingsOpen = $state(false);
   settingsTab = $state<SettingsTab>("appearance");
@@ -567,6 +683,39 @@ class AppStore {
   get selectedCommit() {
     return this.active?.selectedCommit ?? null;
   }
+  get commitMessage(): string {
+    return this.active?.commitMessage ?? "";
+  }
+  set commitMessage(value: string) {
+    if (this.active) this.active.commitMessage = value;
+  }
+  get aiOpen(): boolean {
+    return this.active?.aiOpen ?? false;
+  }
+  get aiMode(): AiMode {
+    return this.active?.aiMode ?? "chat";
+  }
+  get aiEntries(): AiEntry[] {
+    return this.active?.aiEntries ?? [];
+  }
+  get aiDraft(): string {
+    return this.active?.aiDraft ?? "";
+  }
+  set aiDraft(value: string) {
+    if (this.active) this.active.aiDraft = value;
+  }
+  get aiRunning(): boolean {
+    return this.active?.aiRunning ?? false;
+  }
+  get aiStatus(): string | null {
+    return this.active?.aiStatus ?? null;
+  }
+  get aiConfig(): AiConfig {
+    return resolveAiConfig(this.aiSettings, this.active?.path ?? null);
+  }
+  get aiConfigured(): boolean {
+    return isAiConfigured(this.aiConfig);
+  }
 
   refreshAll() {
     return this.active?.refreshAll();
@@ -582,6 +731,21 @@ class AppStore {
   }
   loadCommit(commit: CommitInfo) {
     return this.active?.loadCommit(commit);
+  }
+  openAi(mode: AiMode = "chat") {
+    return this.active?.openAi(mode);
+  }
+  closeAi() {
+    return this.active?.closeAi();
+  }
+  resetAi() {
+    return this.active?.resetAi();
+  }
+  sendAi() {
+    return this.active?.sendAi();
+  }
+  useAiCommitMessage(text: string) {
+    return this.active?.useAiCommitMessage(text);
   }
   setGraphRemote(includeRemote: boolean) {
     return this.active?.setGraphRemote(includeRemote);
@@ -741,6 +905,33 @@ class AppStore {
   openErrorLog() {
     this.settingsTab = "errors";
     this.settingsOpen = true;
+  }
+
+  openAiSettings() {
+    this.settingsTab = "ai";
+    this.settingsOpen = true;
+  }
+
+  saveAiConfig(scope: "app" | "repo", config: AiConfig) {
+    const next: AiSettings = {
+      app: this.aiSettings.app,
+      repos: { ...this.aiSettings.repos },
+    };
+    if (scope === "app") {
+      next.app = { ...config };
+    } else if (this.active) {
+      next.repos[this.active.path] = { ...config };
+    }
+    this.aiSettings = next;
+    persistAiSettings(next);
+  }
+
+  clearRepoAiConfig(path: string) {
+    const repos = { ...this.aiSettings.repos };
+    delete repos[path];
+    const next: AiSettings = { app: this.aiSettings.app, repos };
+    this.aiSettings = next;
+    persistAiSettings(next);
   }
 
   private touchRecent(path: string, name: string) {

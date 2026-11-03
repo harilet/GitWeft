@@ -1,3 +1,4 @@
+mod ai;
 mod git;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -43,6 +44,8 @@ pub fn run() {
             git::drop_stash,
             git::get_user_config,
             git::set_user_config,
+            ai::ai_chat,
+            ai::ai_list_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

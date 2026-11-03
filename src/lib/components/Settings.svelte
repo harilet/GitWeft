@@ -11,6 +11,14 @@
     saveAccent,
   } from "../settings";
   import { errorsToText, formatTimestamp } from "../errorlog";
+  import {
+    AI_DEFAULTS,
+    AI_MODEL_SUGGESTIONS,
+    listAiModels,
+    providerLabel,
+    type AiConfig,
+    type AiProvider,
+  } from "../ai";
 
   let accent = $state(loadAccent());
   let copied = $state(false);
@@ -20,7 +28,129 @@
   let global = $state(false);
   let saving = $state(false);
 
+  let aiScope = $state<"app" | "repo">("app");
+  let override = $state(false);
+  let showKey = $state(false);
+  let aiForm = $state<AiConfig>({ ...app.aiSettings.app });
+  let models = $state<string[]>([]);
+  let modelsLoading = $state(false);
+  let modelsError = $state<string | null>(null);
+  let modelsKey = "";
+
   const hasRepo = $derived(!!app.repo);
+  const appAi = $derived(app.aiSettings.app);
+  const repoAi = $derived(app.repo ? app.aiSettings.repos[app.repo.path] : undefined);
+  const modelOptions = $derived(
+    Array.from(
+      new Set([...models, ...AI_MODEL_SUGGESTIONS[aiForm.provider]]),
+    ).sort((a, b) => a.localeCompare(b)),
+  );
+
+  async function refreshModels() {
+    if (modelsLoading) return;
+    modelsLoading = true;
+    modelsError = null;
+    try {
+      models = await listAiModels({
+        provider: aiForm.provider,
+        baseUrl: aiForm.baseUrl,
+        apiKey: aiForm.apiKey,
+      });
+    } catch (e) {
+      models = [];
+      modelsError = typeof e === "string" ? e : String(e);
+    } finally {
+      modelsLoading = false;
+    }
+  }
+
+  function resetAiForm() {
+    const source =
+      aiScope === "repo" && app.repo && repoAi ? repoAi : appAi;
+    aiForm = { ...source, temperature: source.temperature };
+    override = aiScope === "repo" && !!repoAi;
+    modelsError = null;
+  }
+
+  $effect(() => {
+    if (app.settingsTab !== "ai") return;
+    aiScope;
+    app.repo?.path;
+    appAi;
+    repoAi;
+    resetAiForm();
+  });
+
+  $effect(() => {
+    if (app.settingsTab !== "ai") return;
+    if (aiForm.provider !== "ollama") return;
+    const key = `${aiForm.provider}|${aiScope}|${app.repo?.path ?? ""}`;
+    if (key === modelsKey) return;
+    modelsKey = key;
+    void refreshModels();
+  });
+
+  function chooseAiScope(scope: "app" | "repo") {
+    if (scope === "repo" && !hasRepo) return;
+    aiScope = scope;
+    resetAiForm();
+  }
+
+  function onProviderChange(e: Event) {
+    const provider = (e.currentTarget as HTMLSelectElement).value as AiProvider;
+    const previous = AI_DEFAULTS[aiForm.provider];
+    aiForm = {
+      ...aiForm,
+      provider,
+      baseUrl:
+        aiForm.baseUrl === previous.baseUrl
+          ? AI_DEFAULTS[provider].baseUrl
+          : aiForm.baseUrl,
+      model:
+        aiForm.model === previous.model
+          ? AI_DEFAULTS[provider].model
+          : aiForm.model,
+      apiKey: "",
+    };
+    showKey = false;
+    models = [];
+    modelsError = null;
+  }
+
+  function toggleOverride(e: Event) {
+    const checked = (e.currentTarget as HTMLInputElement).checked;
+    override = checked;
+    if (aiScope !== "repo" || !app.repo) return;
+    if (checked) {
+      app.saveAiConfig("repo", { ...aiForm });
+    } else {
+      app.clearRepoAiConfig(app.repo.path);
+      resetAiForm();
+    }
+  }
+
+  function saveAi() {
+    if (aiScope === "repo" && (!app.repo || !override)) return;
+    const temperature = Math.min(
+      2,
+      Math.max(0, Number(aiForm.temperature) || 0),
+    );
+    const config: AiConfig = {
+      ...aiForm,
+      baseUrl: aiForm.baseUrl.trim(),
+      model: aiForm.model.trim(),
+      apiKey: aiForm.apiKey.trim(),
+      temperature,
+    };
+    aiForm = config;
+    app.saveAiConfig(aiScope, config);
+    app.notify("AI settings saved", "success");
+  }
+
+  function resetAiDefaults() {
+    aiForm = { ...AI_DEFAULTS[aiForm.provider] };
+    showKey = false;
+  }
 
   onMount(() => applyAccent(accent));
 
@@ -112,6 +242,12 @@
           onclick={() => (app.settingsTab = "identity")}
         >
           Git identity
+        </button>
+        <button
+          class:active={app.settingsTab === "ai"}
+          onclick={() => (app.settingsTab = "ai")}
+        >
+          AI assistant
         </button>
         <button
           class:active={app.settingsTab === "errors"}
@@ -237,6 +373,174 @@
               </div>
             {/if}
           </section>
+        {:else if app.settingsTab === "ai"}
+          <section class="section">
+            <div class="section-head">
+              <span class="label">AI assistant</span>
+              <span class="label">Read-only tools</span>
+            </div>
+            <p class="desc">
+              Chat with Ollama or OpenAI and let the assistant inspect commits,
+              branches and working-tree diffs. It can never stage, unstage,
+              commit or otherwise modify the repository. Repository data read by
+              a tool is sent to the configured provider.
+            </p>
+
+            <div class="seg ai-scope">
+              <button
+                class:active={aiScope === "app"}
+                onclick={() => chooseAiScope("app")}>App defaults</button
+              >
+              <button
+                class:active={aiScope === "repo"}
+                disabled={!hasRepo}
+                onclick={() => chooseAiScope("repo")}>This repository</button
+              >
+            </div>
+
+            {#if aiScope === "repo" && hasRepo}
+              <label class="row scope">
+                <input type="checkbox" checked={override} onchange={toggleOverride} />
+                <span>Override app-level AI settings for {app.repo?.name}</span>
+              </label>
+              {#if !override}
+                <div class="notice">
+                  <span class="label">Using app defaults</span>
+                  <p class="desc">
+                    This repository uses {providerLabel(appAi.provider)} ·
+                    {appAi.model}. Enable the override above to choose a
+                    different provider, model or key here.
+                  </p>
+                </div>
+              {/if}
+            {/if}
+
+            <fieldset class="ai-fields" disabled={aiScope === "repo" && !override}>
+              <label class="field">
+                <span>Provider</span>
+                <select
+                  class="input"
+                  value={aiForm.provider}
+                  onchange={onProviderChange}
+                >
+                  <option value="ollama">Ollama (local)</option>
+                  <option value="openai">OpenAI (and compatible APIs)</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Base URL</span>
+                <input
+                  class="input"
+                  bind:value={aiForm.baseUrl}
+                  placeholder={AI_DEFAULTS[aiForm.provider].baseUrl}
+                />
+                <p class="field-hint">
+                  {aiForm.provider === "ollama"
+                    ? "Ollama server root, e.g. http://localhost:11434."
+                    : "Include the API version, e.g. https://api.openai.com/v1."}
+                </p>
+              </label>
+
+              <label class="field">
+                <span>Model</span>
+                <div class="model-row">
+                  <input
+                    class="input"
+                    bind:value={aiForm.model}
+                    list="ai-models"
+                    placeholder={AI_DEFAULTS[aiForm.provider].model}
+                  />
+                  <button
+                    class="btn"
+                    type="button"
+                    disabled={modelsLoading || !aiForm.baseUrl.trim()}
+                    onclick={refreshModels}
+                  >
+                    {modelsLoading ? "Loading…" : "Refresh"}
+                  </button>
+                </div>
+                <datalist id="ai-models">
+                  {#each modelOptions as model (model)}
+                    <option value={model}></option>
+                  {/each}
+                </datalist>
+                {#if modelsError}
+                  <p class="field-hint error-hint">{modelsError}</p>
+                {:else if models.length}
+                  <div class="model-chips">
+                    {#each models as model (model)}
+                      <button
+                        class="model-chip"
+                        class:active={aiForm.model === model}
+                        type="button"
+                        onclick={() => (aiForm.model = model)}
+                      >
+                        {model}
+                      </button>
+                    {/each}
+                  </div>
+                  <p class="field-hint">
+                    {models.length}
+                    {aiForm.provider === "ollama" ? "installed" : "available"} models.
+                  </p>
+                {:else}
+                  <p class="field-hint">
+                    {aiForm.provider === "ollama"
+                      ? "Refresh to list models installed on the Ollama server."
+                      : "Refresh to list models available to this API key."}
+                  </p>
+                {/if}
+              </label>
+
+              <label class="field">
+                <span>API key</span>
+                <div class="key-row">
+                  <input
+                    class="input"
+                    type={showKey ? "text" : "password"}
+                    bind:value={aiForm.apiKey}
+                    placeholder={aiForm.provider === "ollama"
+                      ? "Not required for local Ollama"
+                      : "sk-…"}
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <button
+                    class="btn"
+                    type="button"
+                    onclick={() => (showKey = !showKey)}
+                  >
+                    {showKey ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <p class="field-hint">
+                  Stored locally on this device with the rest of the AI
+                  settings.
+                </p>
+              </label>
+
+              <label class="field">
+                <span>Temperature</span>
+                <input
+                  class="input"
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  bind:value={aiForm.temperature}
+                />
+                <p class="field-hint">
+                  Lower values are more focused (0–2, default 0.2).
+                </p>
+              </label>
+            </fieldset>
+
+            <div class="location">
+              The assistant runs with read-only tools: repository info, commit
+              log and diffs, branches, staged changes and unstaged changes.
+            </div>
+          </section>
         {:else}
           <section class="section">
             <div class="section-head">
@@ -295,6 +599,17 @@
         </button>
         <span class="spacer"></span>
         <button class="btn primary" onclick={close}>Close</button>
+      {:else if app.settingsTab === "ai"}
+        <button class="btn" onclick={resetAiDefaults}>Reset fields</button>
+        <span class="spacer"></span>
+        <button class="btn" onclick={close}>Close</button>
+        <button
+          class="btn primary"
+          disabled={aiScope === "repo" && (!hasRepo || !override)}
+          onclick={saveAi}
+        >
+          Save AI settings
+        </button>
       {:else}
         <span class="spacer"></span>
         <button class="btn" onclick={close}>Close</button>
@@ -614,6 +929,80 @@
     color: var(--muted-color);
     word-break: break-all;
     line-height: 1.6;
+  }
+
+  .ai-scope {
+    align-self: flex-start;
+  }
+  .ai-fields {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+  .ai-fields:disabled {
+    opacity: 0.55;
+  }
+  .key-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .key-row .input {
+    flex: 1;
+    min-width: 0;
+  }
+  .model-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .model-row .input {
+    flex: 1;
+    min-width: 0;
+  }
+  .model-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 130px;
+    overflow: auto;
+    margin-top: 8px;
+    padding: 2px;
+  }
+  .model-chip {
+    padding: 5px 8px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--muted-color);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      color 0.15s ease,
+      background 0.15s ease;
+  }
+  .model-chip:hover {
+    border-color: var(--border-strong);
+    color: var(--text-color);
+    background: var(--hover-color);
+  }
+  .model-chip.active {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: var(--hover-color);
+  }
+  .field-hint {
+    margin: 6px 0 0;
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--muted-color);
+  }
+  .field-hint.error-hint {
+    color: var(--red);
   }
 
   .settings-foot {

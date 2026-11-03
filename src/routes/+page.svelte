@@ -7,6 +7,7 @@
   import Tags from "$lib/components/Tags.svelte";
   import Stashes from "$lib/components/Stashes.svelte";
   import Settings from "$lib/components/Settings.svelte";
+  import AiPanel from "$lib/components/AiPanel.svelte";
   import DiffView from "$lib/components/DiffView.svelte";
   import BranchSwitcher from "$lib/components/BranchSwitcher.svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
@@ -91,6 +92,11 @@
               class="btn sm"
               onclick={() => app.refreshAll()}
               title="Refresh (Ctrl+R)">Refresh</button
+            >
+            <button
+              class="btn sm"
+              title="Repository AI assistant"
+              onclick={() => app.openAi("chat")}>AI</button
             >
             <button
               class="btn sm"
@@ -199,6 +205,10 @@
 
 {#if app.settingsOpen}
   <Settings />
+{/if}
+
+{#if app.aiOpen}
+  <AiPanel />
 {/if}
 
 <style>
