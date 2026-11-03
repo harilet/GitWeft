@@ -414,6 +414,12 @@ export interface AiRunResult {
   history: AiMessage[];
 }
 
+export interface AiToolProgress {
+  call: AiToolCall;
+  phase: "start" | "done" | "error";
+  result?: string;
+}
+
 export function listAiModels(
   config: Pick<AiConfig, "provider" | "baseUrl" | "apiKey">,
 ): Promise<string[]> {
@@ -431,6 +437,7 @@ export async function runAiAgent(
   repository: string,
   history: AiMessage[],
   onStatus?: (status: string) => void,
+  onTool?: (event: AiToolProgress) => void,
 ): Promise<AiRunResult> {
   const messages: AiMessage[] = [...history];
 
@@ -454,12 +461,17 @@ export async function runAiAgent(
 
     for (const call of response.toolCalls) {
       onStatus?.(TOOL_LABELS[call.name] ?? `Running ${call.name}`);
+      onTool?.({ call, phase: "start" });
       let result: string;
+      let failed = false;
       try {
         result = await executeTool(repository, call.name, call.arguments);
+        failed = result.startsWith("Error:");
       } catch (e) {
         result = `Error: ${typeof e === "string" ? e : String(e)}`;
+        failed = true;
       }
+      onTool?.({ call, phase: failed ? "error" : "done", result });
       messages.push({
         role: "tool",
         content: result,

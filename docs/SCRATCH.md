@@ -70,7 +70,8 @@ review the tool loop with a non-tool-capable model.
   message/tool-call normalization, optional bearer auth and focused unit tests.
 - Added `src/lib/ai.ts`: provider defaults/validation, app + repo persistence,
   model listing, read-only tool schemas, tool executor and the bounded agent loop.
-- Added `AiPanel.svelte`: chat drawer, tool status, provider notice, generated
+- Added `AiPanel.svelte`: chat drawer, per-call tool rows with running/done/failed
+  state and collapsed argument/result details, provider notice, generated
   commit-message insert, auto-start for commit mode.
 - Extended `AppStore`/`RepoSession`: per-repo AI conversations and drafts, AI
   settings save/clear, commit draft moved into the session.
@@ -81,6 +82,8 @@ review the tool loop with a non-tool-capable model.
   now persists per repo.
 - Model listing now reads `/api/tags` (Ollama) or `/models` (OpenAI) instead of
   relying on a static suggestion list.
+- Tool rows are rebuilt from the provider history after each turn, so tool calls/results
+  still appear if a live progress event is missed.
 - Smoke-tested the Ollama `/api/chat` request shape against the local server with
   a tool-capable model: the first round returned `message.tool_calls` with object
   arguments and the second round accepted our assistant/tool messages and

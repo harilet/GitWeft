@@ -34,6 +34,7 @@ import {
   type AiConfig,
   type AiMessage,
   type AiSettings,
+  type AiToolCall,
 } from "./ai";
 
 export type ViewKey = "changes" | "history" | "branches" | "tags" | "stashes";
@@ -42,8 +43,12 @@ export type AiMode = "chat" | "commit";
 
 export interface AiEntry {
   id: number;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
+  toolName?: string;
+  toolArguments?: string;
+  toolResult?: string;
+  toolState?: "running" | "done" | "error";
 }
 
 export interface DiffTarget {
@@ -78,6 +83,68 @@ function markFetched(path: string) {
   } catch {
     // ignore storage errors
   }
+}
+
+/**
+ * Rebuild the visible conversation from the provider history. Tool calls live
+ * alongside normal messages there, so this guarantees tool rows survive even if
+ * a live progress callback was missed.
+ */
+function buildAiEntries(
+  history: AiMessage[],
+  nextId: () => number,
+): AiEntry[] {
+  const entries: AiEntry[] = [];
+  const pending: number[] = [];
+
+  const pushTool = (call: NonNullable<AiMessage["toolCalls"]>[number]) => {
+    entries.push({
+      id: nextId(),
+      role: "tool",
+      content: call.name,
+      toolName: call.name,
+      toolArguments: call.arguments,
+      toolResult: "",
+      toolState: "done",
+    });
+    pending.push(entries.length - 1);
+  };
+
+  for (const message of history) {
+    if (message.role === "user") {
+      entries.push({ id: nextId(), role: "user", content: message.content });
+    } else if (message.role === "assistant") {
+      const calls = message.toolCalls ?? [];
+      if (calls.length > 0) {
+        if (message.content.trim()) {
+          entries.push({
+            id: nextId(),
+            role: "assistant",
+            content: message.content,
+          });
+        }
+        for (const call of calls) pushTool(call);
+      } else if (message.content.trim()) {
+        entries.push({
+          id: nextId(),
+          role: "assistant",
+          content: message.content,
+        });
+      }
+    } else if (message.role === "tool" && pending.length > 0) {
+      const match = pending.findIndex(
+        (index) => entries[index].toolName === message.toolName,
+      );
+      const entryIndex = pending.splice(match >= 0 ? match : 0, 1)[0];
+      entries[entryIndex] = {
+        ...entries[entryIndex],
+        toolResult: message.content,
+        toolState: message.content.startsWith("Error:") ? "error" : "done",
+      };
+    }
+  }
+
+  return entries;
 }
 
 /**
@@ -358,19 +425,61 @@ export class RepoSession {
       ...this.aiHistory,
       { role: "user", content: prompt },
     ];
+    const toolEntries = new Map<AiToolCall, number>();
     try {
-      const result = await runAiAgent(config, this.path, history, (status) => {
-        this.aiStatus = status;
-      });
-      this.aiHistory = result.history;
-      this.aiEntries = [
-        ...this.aiEntries,
-        {
-          id: ++this.aiEntrySeq,
-          role: "assistant",
-          content: result.text || "The model returned an empty response.",
+      const result = await runAiAgent(
+        config,
+        this.path,
+        history,
+        (status) => {
+          this.aiStatus = status;
         },
-      ];
+        (event) => {
+          if (event.phase === "start") {
+            const id = ++this.aiEntrySeq;
+            toolEntries.set(event.call, id);
+            this.aiEntries = [
+              ...this.aiEntries,
+              {
+                id,
+                role: "tool",
+                content: event.call.name,
+                toolName: event.call.name,
+                toolArguments: event.call.arguments,
+                toolState: "running",
+              },
+            ];
+            return;
+          }
+          const id = toolEntries.get(event.call);
+          if (id === undefined) return;
+          const state = event.phase === "error" ? "error" : "done";
+          this.aiEntries = this.aiEntries.map((entry) =>
+            entry.id === id
+              ? {
+                  ...entry,
+                  toolState: state,
+                  toolResult: event.result ?? "",
+                }
+              : entry,
+          );
+        },
+      );
+      this.aiHistory = result.history;
+      const rebuilt = buildAiEntries(
+        result.history,
+        () => ++this.aiEntrySeq,
+      );
+      this.aiEntries = result.text
+        ? rebuilt
+        : [
+            ...rebuilt,
+            {
+              id: ++this.aiEntrySeq,
+              role: "assistant",
+              content: "The model returned an empty response.",
+            },
+          ];
     } catch (e) {
       const text = typeof e === "string" ? e : String(e);
       this.app.notify(text, "error");

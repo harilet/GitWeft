@@ -1,14 +1,51 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { app } from "../store.svelte";
+  import { app, type AiEntry } from "../store.svelte";
   import { providerLabel } from "../ai";
 
   let listEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
+  let expandedTools = $state<Record<number, boolean>>({});
 
   const title = $derived(
     app.aiMode === "commit" ? "Commit message assistant" : "Repository assistant",
   );
+
+  function toggleTool(id: number) {
+    expandedTools = { ...expandedTools, [id]: !expandedTools[id] };
+  }
+
+  function formatToolArgs(raw?: string): string {
+    if (!raw?.trim()) return "{}";
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch {
+      return raw;
+    }
+  }
+
+  function toolSummary(entry: AiEntry): string {
+    const raw = entry.toolArguments?.trim();
+    if (!raw || raw === "{}") return "";
+    try {
+      const args = JSON.parse(raw) as Record<string, unknown>;
+      return Object.entries(args)
+        .map(([key, value]) => {
+          const text =
+            typeof value === "string" ? value : JSON.stringify(value);
+          return `${key}=${text}`;
+        })
+        .join(" · ");
+    } catch {
+      return raw;
+    }
+  }
+
+  function toolStateLabel(state?: AiEntry["toolState"]): string {
+    if (state === "running") return "running";
+    if (state === "error") return "failed";
+    return "done";
+  }
 
   onMount(() => {
     if (app.aiMode === "commit" && app.aiEntries.length === 0 && app.aiConfigured) {
@@ -118,20 +155,57 @@
       {/if}
 
       {#each app.aiEntries as entry (entry.id)}
-        <article class="msg {entry.role}">
-          <div class="msg-head">
-            <span class="label">{entry.role === "user" ? "You" : "Assistant"}</span>
-            {#if entry.role === "assistant" && app.aiMode === "commit"}
-              <button
-                class="btn ghost sm"
-                onclick={() => app.useAiCommitMessage(entry.content)}
-              >
-                Use as commit message
-              </button>
+        {#if entry.role === "tool"}
+          <div class="tool-call {entry.toolState ?? ''}">
+            <button
+              class="tool-call-head"
+              type="button"
+              aria-expanded={!!expandedTools[entry.id]}
+              onclick={() => toggleTool(entry.id)}
+            >
+              <span class="tool-dot {entry.toolState ?? ''}"></span>
+              <span class="tool-name">{entry.toolName}</span>
+              {#if toolSummary(entry)}
+                <span class="tool-summary">{toolSummary(entry)}</span>
+              {/if}
+              <span class="tool-state {entry.toolState ?? ''}">
+                {toolStateLabel(entry.toolState)}
+              </span>
+              <span class="tool-chevron">
+                {expandedTools[entry.id] ? "−" : "+"}
+              </span>
+            </button>
+            {#if expandedTools[entry.id]}
+              <div class="tool-detail">
+                <span class="label">Arguments</span>
+                <pre>{formatToolArgs(entry.toolArguments)}</pre>
+                <span class="label">Result</span>
+                {#if entry.toolState === "running"}
+                  <pre class="muted">Running…</pre>
+                {:else}
+                  <pre>{entry.toolResult?.trim() || "(empty)"}</pre>
+                {/if}
+              </div>
             {/if}
           </div>
-          <div class="msg-body">{entry.content}</div>
-        </article>
+        {:else}
+          <article class="msg {entry.role}">
+            <div class="msg-head">
+              <span class="label"
+                >{entry.role === "user" ? "You" : "Assistant"}</span
+              >
+              {#if entry.role === "assistant" && app.aiMode === "commit"}
+                <button
+                  class="btn ghost sm"
+                  onclick={() => app.useAiCommitMessage(entry.content)}
+                >
+                  Use as commit message
+                </button>
+              {/if}
+            </div>
+            <div class="msg-body">{entry.content}</div>
+          </article>
+        {/if}
       {/each}
 
       {#if app.aiStatus}
@@ -290,6 +364,120 @@
     white-space: pre-wrap;
     word-break: break-word;
     font-family: var(--font-mono);
+  }
+
+  .tool-call {
+    border: 1px solid var(--border-color);
+    background: var(--background-color);
+  }
+  .tool-call.running {
+    border-left: 2px solid var(--yellow);
+  }
+  .tool-call.done {
+    border-left: 2px solid var(--green);
+  }
+  .tool-call.error {
+    border-left: 2px solid var(--red);
+  }
+  .tool-call-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    font-family: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  .tool-call-head:hover {
+    background: var(--hover-color);
+  }
+  .tool-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    background: var(--muted-color);
+  }
+  .tool-dot.running {
+    background: var(--yellow);
+    animation: pulse 1s infinite;
+  }
+  .tool-dot.done {
+    background: var(--green);
+  }
+  .tool-dot.error {
+    background: var(--red);
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .tool-name {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .tool-summary {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted-color);
+  }
+  .tool-state {
+    flex: 0 0 auto;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-color);
+  }
+  .tool-state.running {
+    color: var(--yellow);
+  }
+  .tool-state.done {
+    color: var(--green);
+  }
+  .tool-state.error {
+    color: var(--red);
+  }
+  .tool-chevron {
+    flex: 0 0 auto;
+    width: 14px;
+    text-align: center;
+    color: var(--muted-color);
+    font-family: var(--font-mono);
+  }
+  .tool-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px 10px;
+    border-top: 1px solid var(--border-color);
+  }
+  .tool-detail pre {
+    margin: 0;
+    max-height: 220px;
+    overflow: auto;
+    padding: 8px 10px;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .tool-detail pre.muted {
+    color: var(--muted-color);
   }
 
   .tool-status {
