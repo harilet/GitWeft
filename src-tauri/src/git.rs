@@ -369,8 +369,8 @@ pub fn stage_file(path: String, repository: String) -> Result<(), String> {
 pub fn unstage_file(path: String, repository: String) -> Result<(), String> {
     let p = PathBuf::from(&repository);
     let repo = open(&p)?;
-    let head = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-    let target = head.as_ref().map(|t| t.as_object());
+    let head = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let target = head.as_ref().map(|c| c.as_object());
     repo.reset_default(target, [Path::new(&path)])
         .map_err(|e| e.message().to_string())?;
     Ok(())
@@ -393,8 +393,8 @@ pub fn stage_all(repository: String) -> Result<(), String> {
 pub fn unstage_all(repository: String) -> Result<(), String> {
     let p = PathBuf::from(&repository);
     let repo = open(&p)?;
-    let head = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-    let target = head.as_ref().map(|t| t.as_object());
+    let head = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let target = head.as_ref().map(|c| c.as_object());
     repo.reset_default(target, None::<&str>)
         .map_err(|e| e.message().to_string())?;
     Ok(())
@@ -416,8 +416,8 @@ pub fn discard_file(path: String, repository: String) -> Result<(), String> {
         return Ok(());
     }
 
-    let head = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
-    let target = head.as_ref().map(|t| t.as_object());
+    let head = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let target = head.as_ref().map(|c| c.as_object());
     repo.reset_default(target, [Path::new(&path)])
         .map_err(|e| e.message().to_string())?;
     let mut cb = CheckoutBuilder::new();
@@ -1515,6 +1515,32 @@ mod tests {
         assert_eq!(page.len(), 2);
         assert_eq!(page[0].oid, all[1].oid);
         assert_eq!(page[1].oid, all[2].oid);
+    }
+
+    #[test]
+    fn discards_worktree_changes_without_peel_error() {
+        let t = init();
+        commit_file(&t.repo, "a.txt", "hello");
+        std::fs::write(t.path.join("a.txt"), "changed").unwrap();
+        let path = t.path.to_string_lossy().to_string();
+        discard_file("a.txt".into(), path).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(t.path.join("a.txt")).unwrap(),
+            "hello"
+        );
+    }
+
+    #[test]
+    fn unstages_file_without_peel_error() {
+        let t = init();
+        commit_file(&t.repo, "a.txt", "hello");
+        std::fs::write(t.path.join("a.txt"), "changed").unwrap();
+        stage_path(&t.repo, "a.txt").unwrap();
+        let path = t.path.to_string_lossy().to_string();
+        unstage_file("a.txt".into(), path).unwrap();
+        let status = t.repo.status_file(Path::new("a.txt")).unwrap();
+        assert!(!status.contains(Status::INDEX_MODIFIED));
+        assert!(status.contains(Status::WT_MODIFIED));
     }
 
     #[test]

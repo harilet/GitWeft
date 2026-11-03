@@ -183,7 +183,18 @@
 </div>
 
 {#if app.toast}
-  <div class="toast {app.toast.kind}">{app.toast.text}</div>
+  <div class="toast {app.toast.kind}">
+    <span class="toast-text">{app.toast.text}</span>
+    {#if app.toast.kind === "error"}
+      <button
+        class="toast-action"
+        onclick={() => {
+          app.toast = null;
+          app.openErrorLog();
+        }}>View log</button
+      >
+    {/if}
+  </div>
 {/if}
 
 {#if app.settingsOpen}
@@ -405,7 +416,10 @@
     position: fixed;
     right: 16px;
     bottom: 16px;
-    max-width: 380px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    max-width: 420px;
     padding: 11px 14px;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
@@ -413,6 +427,25 @@
     font-size: 12px;
     z-index: 200;
     white-space: pre-wrap;
+  }
+  .toast-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .toast-action {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border: 1px solid var(--border-strong);
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+  }
+  .toast-action:hover {
+    background: var(--hover-color);
   }
   .toast.error {
     border-color: #6e2a2a;

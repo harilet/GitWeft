@@ -17,8 +17,15 @@ import {
   sortRecents,
   type RecentProject,
 } from "./recents";
+import {
+  createError,
+  loadErrors,
+  persistErrors,
+  type ErrorLogEntry,
+} from "./errorlog";
 
 export type ViewKey = "changes" | "history" | "branches" | "tags" | "stashes";
+export type SettingsTab = "appearance" | "identity" | "errors";
 
 export interface DiffTarget {
   title: string;
@@ -454,6 +461,9 @@ class AppStore {
   recents = $state<RecentProject[]>(sortRecents(loadRecents()));
 
   settingsOpen = $state(false);
+  settingsTab = $state<SettingsTab>("appearance");
+
+  errorLog = $state<ErrorLogEntry[]>(loadErrors());
 
   toast = $state<{ kind: "info" | "error" | "success"; text: string } | null>(
     null,
@@ -471,6 +481,20 @@ class AppStore {
     ).catch(() => {
       // Progress events are best-effort.
     });
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("error", (event) => {
+        this.logError(event.message || "Unknown error");
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        this.logError(
+          typeof reason === "string"
+            ? reason
+            : (reason?.message ?? String(reason)),
+        );
+      });
+    }
   }
 
   get active(): RepoSession | null {
@@ -696,9 +720,27 @@ class AppStore {
   }
 
   notify(text: string, kind: "info" | "error" | "success" = "info") {
+    if (kind === "error") this.logError(text);
     this.toast = { kind, text };
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => (this.toast = null), 4500);
+  }
+
+  logError(text: string) {
+    const message = text.trim() || "Unknown error";
+    const entry = createError(message, this.active?.repo?.path);
+    this.errorLog = [entry, ...this.errorLog].slice(0, 200);
+    persistErrors(this.errorLog);
+  }
+
+  clearErrorLog() {
+    this.errorLog = [];
+    persistErrors(this.errorLog);
+  }
+
+  openErrorLog() {
+    this.settingsTab = "errors";
+    this.settingsOpen = true;
   }
 
   private touchRecent(path: string, name: string) {

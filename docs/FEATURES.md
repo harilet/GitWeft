@@ -24,6 +24,8 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       dialog (appearance + Git identity local/global), toolbar branch switcher,
       nav rail counts, toasts, spinners and empty states.
 - [x] Shortcuts: `Ctrl/Cmd + R` refresh, `Ctrl/Cmd + ,` settings, `Esc` close dialog.
+- [x] Persistent error log: toast errors and uncaught runtime errors are saved on
+      device (max 200), viewable in Settings → Error log with copy-all and clear.
 
 ## In progress
 

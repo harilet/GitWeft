@@ -10,9 +10,10 @@
     normalizeAccent,
     saveAccent,
   } from "../settings";
+  import { errorsToText, formatTimestamp } from "../errorlog";
 
-  let tab = $state<"appearance" | "identity">("appearance");
   let accent = $state(loadAccent());
+  let copied = $state(false);
 
   let name = $state(app.user?.name ?? "");
   let email = $state(app.user?.email ?? "");
@@ -41,6 +42,25 @@
 
   function resetAccent() {
     choose(DEFAULT_ACCENT);
+  }
+
+  async function copyErrors() {
+    const text = errorsToText(app.errorLog);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    copied = true;
+    setTimeout(() => (copied = false), 1500);
   }
 
   async function saveIdentity() {
@@ -82,23 +102,32 @@
     <div class="settings-body">
       <nav class="settings-nav">
         <button
-          class:active={tab === "appearance"}
-          onclick={() => (tab = "appearance")}
+          class:active={app.settingsTab === "appearance"}
+          onclick={() => (app.settingsTab = "appearance")}
         >
           Appearance
         </button>
         <button
-          class:active={tab === "identity"}
-          onclick={() => (tab = "identity")}
+          class:active={app.settingsTab === "identity"}
+          onclick={() => (app.settingsTab = "identity")}
         >
           Git identity
+        </button>
+        <button
+          class:active={app.settingsTab === "errors"}
+          onclick={() => (app.settingsTab = "errors")}
+        >
+          Error log
+          {#if app.errorLog.length}
+            <span class="tab-count">{app.errorLog.length}</span>
+          {/if}
         </button>
         <div class="spacer"></div>
         <div class="nav-note label">Saved on this device</div>
       </nav>
 
       <div class="settings-panel main-scrollbar">
-        {#if tab === "appearance"}
+        {#if app.settingsTab === "appearance"}
           <section class="section">
             <div class="section-head">
               <span class="label">Accent color</span>
@@ -157,7 +186,7 @@
               </div>
             </div>
           </section>
-        {:else}
+        {:else if app.settingsTab === "identity"}
           <section class="section">
             <div class="section-head">
               <span class="label">Git identity</span>
@@ -208,15 +237,64 @@
               </div>
             {/if}
           </section>
+        {:else}
+          <section class="section">
+            <div class="section-head">
+              <span class="label">Error log</span>
+              <span class="label">{app.errorLog.length} saved</span>
+            </div>
+            <p class="desc">
+              Errors shown as toasts are saved here on this device. They stay
+              available after the toast disappears and across restarts.
+            </p>
+
+            {#if app.errorLog.length === 0}
+              <div class="notice">
+                <span class="label">No errors logged</span>
+                <p class="desc">Anything that fails will appear here.</p>
+              </div>
+            {:else}
+              <ul class="error-list main-scrollbar">
+                {#each app.errorLog as entry (entry.id)}
+                  <li class="error-entry">
+                    <div class="error-meta">
+                      <span class="error-time">{formatTimestamp(entry.time)}</span>
+                      {#if entry.repo}
+                        <span class="error-repo" title={entry.repo}>{entry.repo}</span>
+                      {/if}
+                    </div>
+                    <pre class="error-message">{entry.message}</pre>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </section>
         {/if}
       </div>
     </div>
 
     <footer class="settings-foot">
-      {#if tab === "appearance"}
+      {#if app.settingsTab === "appearance"}
         <button class="btn" onclick={resetAccent}>Reset to default</button>
         <span class="spacer"></span>
         <button class="btn primary" onclick={close}>Done</button>
+      {:else if app.settingsTab === "errors"}
+        <button
+          class="btn"
+          disabled={app.errorLog.length === 0}
+          onclick={app.clearErrorLog}
+        >
+          Clear log
+        </button>
+        <button
+          class="btn"
+          disabled={app.errorLog.length === 0}
+          onclick={copyErrors}
+        >
+          {copied ? "Copied" : "Copy all"}
+        </button>
+        <span class="spacer"></span>
+        <button class="btn primary" onclick={close}>Close</button>
       {:else}
         <span class="spacer"></span>
         <button class="btn" onclick={close}>Close</button>
@@ -321,6 +399,62 @@
     font-size: 9px;
     line-height: 1.6;
     white-space: normal;
+  }
+  .tab-count {
+    margin-left: auto;
+    padding: 1px 6px;
+    border: 1px solid var(--border-strong);
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    color: var(--muted-color);
+  }
+
+  .error-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .error-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    background: var(--background-color);
+  }
+  .error-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-color);
+  }
+  .error-time {
+    flex: 0 0 auto;
+  }
+  .error-repo {
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .error-message {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.6;
+    color: #ffdcd7;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .settings-panel {
