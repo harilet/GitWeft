@@ -5,15 +5,14 @@ Append dated entries, keep the top current, prune what is obvious from code.
 ## Current focus
 
 AI assistant shipped: read-only chat/tool loop over Ollama and OpenAI, app-level
-and per-repository provider settings, and commit-message generation from Changes.
-Next session should smoke-test against a real Ollama server and an OpenAI key, and
-review the tool loop with a non-tool-capable model.
+and per-repository provider settings, commit-message generation from Changes, and
+branch/ref-aware history plus branch comparison. Next session should smoke-test an
+OpenAI key and review the tool loop with a non-tool-capable model.
 
 ## Next up
 
 - Manual provider smoke test: Ollama (`llama3.2` or another tool-capable model) and
   OpenAI (`gpt-4o-mini`), including a generated commit message.
-- Add a model-list refresh if provider model names become hard to type.
 - Pick the next feature from `docs/FEATURES.md` Ideas.
 
 ## Known issues / watch-outs
@@ -31,10 +30,10 @@ review the tool loop with a non-tool-capable model.
 - Error log lives in `localStorage` (`gitweft.errors`, max 200) and covers toast
   errors plus uncaught `error`/`unhandledrejection`; it does not write a file.
 - Version mismatch: `package.json` is `0.1.0`; `src-tauri/tauri.conf.json` is
-  `0.1.2`. Check before packaging.
+  `0.1.4`. Check before packaging.
 - No CI workflow. Validation is manual: `npm run check`, `npm run build`,
   `cargo test`, `cargo clippy --all-targets`, `cargo fmt --check`.
-- No frontend lint/format script and no frontend tests; backend has 15 unit tests.
+- No frontend lint/format script and no frontend tests; backend has 16 unit tests.
 - Fetch/pull/push/clone require system `git` and configured credentials.
 - Root `FEATURES.md` and `README.md` predate this flow; `docs/FEATURES.md` is the
   canonical living scope.
@@ -84,12 +83,15 @@ review the tool loop with a non-tool-capable model.
   relying on a static suggestion list.
 - Tool rows are rebuilt from the provider history after each turn, so tool calls/results
   still appear if a live progress event is missed.
+- History tools accept branch names, tags and revision expressions. `compare_branches`
+  returns commits reachable from `head` but not `base`, so merge-impact questions no
+  longer require a SHA.
 - Smoke-tested the Ollama `/api/chat` request shape against the local server with
   a tool-capable model: the first round returned `message.tool_calls` with object
   arguments and the second round accepted our assistant/tool messages and
   produced a final answer.
 - Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
-  `cargo test` 15 passed; `cargo clippy --all-targets` clean; `cargo fmt --check`
+  `cargo test` 16 passed; `cargo clippy --all-targets` clean; `cargo fmt --check`
   clean.
 
 ### 2026-11-03 — Fix discard/unstage peel error

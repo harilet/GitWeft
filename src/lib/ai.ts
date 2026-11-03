@@ -151,6 +151,7 @@ Rules:
 - You may ONLY inspect the repository using the provided tools. You cannot stage, unstage, commit, discard, checkout, push, or modify anything.
 - Never claim that a change was made. If the user asks for a write action, explain that you can only read and that they must perform it in the UI.
 - Use tools to gather facts before answering. Do not invent commits, files, or diffs.
+- For questions about what merging one branch into another would bring in, use compare_branches with the target branch as base and the source branch as head.
 - For commit messages, inspect the staged changes first. If nothing is staged, inspect the unstaged changes and say so. Output only the commit message: a concise summary line, then optionally a blank line and a body. Do not wrap it in quotes or code fences.
 - Be concise. Use Markdown only when it helps.`;
 
@@ -176,10 +177,16 @@ export const AI_TOOLS: AiToolDef[] = [
     type: "function",
     function: {
       name: "list_commits",
-      description: "List recent commits, newest first.",
+      description:
+        "List commits reachable from a revision (default: current HEAD), newest first.",
       parameters: {
         type: "object",
         properties: {
+          rev: {
+            type: "string",
+            description:
+              "Branch, tag, ref or SHA to start from. Omit for the current HEAD.",
+          },
           limit: {
             type: "integer",
             minimum: 1,
@@ -199,14 +206,46 @@ export const AI_TOOLS: AiToolDef[] = [
   {
     type: "function",
     function: {
-      name: "get_commit",
-      description: "Show the full patch for one commit, identified by its full SHA or short SHA.",
+      name: "compare_branches",
+      description:
+        "Compare two revisions or branches. Returns commits reachable from head but not base, plus ahead/behind counts. Use this to answer what a merge would bring in.",
       parameters: {
         type: "object",
         properties: {
-          oid: { type: "string", description: "Commit SHA (full or short)." },
+          base: {
+            type: "string",
+            description: "Base branch/ref/SHA (the branch being merged into).",
+          },
+          head: {
+            type: "string",
+            description: "Head branch/ref/SHA (the branch being merged from).",
+          },
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: 200,
+            description: "Maximum number of unique head commits to list.",
+          },
         },
-        required: ["oid"],
+        required: ["base", "head"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_commit",
+      description:
+        "Show the full patch for a commit. Accepts a SHA, branch/tag name, or revision expression such as HEAD~1.",
+      parameters: {
+        type: "object",
+        properties: {
+          rev: {
+            type: "string",
+            description: "Commit SHA, branch/tag name, or revision expression.",
+          },
+        },
+        required: ["rev"],
       },
     },
   },
@@ -258,6 +297,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_repository_info: "Reading repository info",
   get_status: "Reading working tree status",
   list_commits: "Browsing commits",
+  compare_branches: "Comparing branches",
   get_commit: "Reading commit",
   get_staged_diff: "Reading staged changes",
   get_unstaged_diff: "Reading unstaged changes",
@@ -343,18 +383,47 @@ async function executeTool(
     case "list_commits": {
       const limit = clampInt(args.limit, 1, 100, 20);
       const skip = clampInt(args.skip, 0, 100_000, 0);
-      const commits = await git.getLog(repository, limit, skip);
+      const rev = typeof args.rev === "string" ? args.rev.trim() : "";
+      const commits = await git.getLog(repository, limit, skip, rev || null);
       return commits.length
         ? commits.map(formatCommit).join("\n\n")
         : "No commits found.";
     }
+    case "compare_branches": {
+      const base = typeof args.base === "string" ? args.base.trim() : "";
+      const head = typeof args.head === "string" ? args.head.trim() : "";
+      if (!base || !head) return "Error: base and head are required.";
+      const limit = clampInt(args.limit, 1, 200, 200);
+      const comparison = await git.compareBranches(
+        repository,
+        base,
+        head,
+        limit,
+      );
+      const header = [
+        `Comparison ${comparison.base}..${comparison.head}`,
+        `base: ${comparison.baseOid}`,
+        `head: ${comparison.headOid}`,
+        `ahead (only in head): ${comparison.ahead}`,
+        `behind (only in base): ${comparison.behind}`,
+      ].join("\n");
+      const body = comparison.commits.length
+        ? comparison.commits.map(formatCommit).join("\n\n")
+        : "No commits are reachable from head that are not already in base.";
+      return `${header}\n\n${body}`;
+    }
     case "get_commit": {
-      const oid = typeof args.oid === "string" ? args.oid.trim() : "";
-      if (!oid) return "Error: oid is required.";
-      const patch = await git.getCommitDiff(repository, oid);
+      const rev =
+        typeof args.rev === "string"
+          ? args.rev.trim()
+          : typeof args.oid === "string"
+            ? args.oid.trim()
+            : "";
+      if (!rev) return "Error: rev is required.";
+      const patch = await git.getCommitDiff(repository, rev);
       return patch.trim()
         ? truncate(patch)
-        : `Commit ${oid} has an empty diff.`;
+        : `Commit ${rev} has an empty diff.`;
     }
     case "get_staged_diff": {
       const patch = await git.getWorktreeDiff(repository, null, true);

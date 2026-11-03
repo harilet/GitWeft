@@ -23,7 +23,7 @@ npm run preview             # preview the frontend build
 npm run check               # svelte-kit sync + svelte-check (TS/Svelte diagnostics)
 npm run tauri build         # release desktop bundle (deb only)
 
-cd src-tauri && cargo test                 # 15 unit tests in git.rs + ai.rs
+cd src-tauri && cargo test                 # 16 unit tests in git.rs + ai.rs
 cd src-tauri && cargo clippy --all-targets # Rust lint
 cd src-tauri && cargo fmt --check          # Rust format check; use cargo fmt to write
 ```
@@ -33,7 +33,7 @@ Frontend validation is `npm run check`; Rust lint/format are the cargo commands.
 There is no CI workflow in the repo — run the checks manually.
 
 Last verified 2026-11-03: `npm run check` 0 errors/0 warnings; `npm run build` OK;
-`cargo test` 15 passed; `cargo clippy --all-targets` clean; `cargo fmt --check` clean.
+`cargo test` 16 passed; `cargo clippy --all-targets` clean; `cargo fmt --check` clean.
 
 ## Architecture map
 
@@ -132,7 +132,7 @@ log, branches, graph, remotes, tags, stashes and user config for one refresh.
   `localStorage` under `gitweft.ai`.
 - Tests are backend-only and create temporary repositories; run them from
   `src-tauri/`. There are no frontend tests.
-- `package.json` version is `0.1.0`; `src-tauri/tauri.conf.json` is `0.1.2` in the
+- `package.json` version is `0.1.0`; `src-tauri/tauri.conf.json` is `0.1.4` in the
   current working tree. Check the release version before packaging.
 - Do not edit generated directories (`build/`, `.svelte-kit/`, `src-tauri/gen/`,
   `src-tauri/target/`).

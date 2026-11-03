@@ -32,8 +32,9 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
 - [x] AI assistant: Ollama and OpenAI providers with app-level and per-repository
       settings, provider model discovery (installed Ollama models and OpenAI model
       IDs), a read-only chat drawer with collapsible per-call tool activity and
-      results, tools for repository info, commits, branches, staged/unstaged
-      diffs, and commit-message generation from the Changes view.
+      results, tools for repository info, branch/ref-aware commit history, branch
+      comparison, branches, staged/unstaged diffs, and commit-message generation
+      from the Changes view.
 
 ## In progress
 

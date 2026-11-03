@@ -18,6 +18,29 @@ fn open(path: &Path) -> Result<Repository, String> {
     Repository::open(path).map_err(|e| e.message().to_string())
 }
 
+fn resolve_commit<'a>(repo: &'a Repository, rev: &str) -> Result<git2::Commit<'a>, String> {
+    let object = repo
+        .revparse_single(rev)
+        .map_err(|e| format!("Cannot resolve revision '{}': {}", rev, e.message()))?;
+    object
+        .peel_to_commit()
+        .map_err(|e| format!("Revision '{}' is not a commit: {}", rev, e.message()))
+}
+
+fn commit_info(oid: git2::Oid, commit: &git2::Commit<'_>) -> CommitInfo {
+    let author = commit.author();
+    CommitInfo {
+        oid: oid.to_string(),
+        short: short(oid),
+        summary: commit.summary().unwrap_or("").to_string(),
+        message: commit.message().unwrap_or("").to_string(),
+        author: author.name().unwrap_or("").to_string(),
+        email: author.email().unwrap_or("").to_string(),
+        time: commit.time().seconds(),
+        parents: commit.parent_ids().map(|p| p.to_string()).collect(),
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoInfo {
@@ -462,10 +485,23 @@ pub fn commit(
     Ok(oid.to_string())
 }
 
-fn log_entries(repo: &Repository, limit: usize, skip: usize) -> Result<Vec<CommitInfo>, String> {
+fn log_entries_for(
+    repo: &Repository,
+    limit: usize,
+    skip: usize,
+    rev: Option<&str>,
+) -> Result<Vec<CommitInfo>, String> {
     let mut walk = repo.revwalk().map_err(err)?;
-    if walk.push_head().is_err() {
-        return Ok(Vec::new());
+    match rev.map(str::trim).filter(|r| !r.is_empty()) {
+        Some(rev) => {
+            let commit = resolve_commit(repo, rev)?;
+            walk.push(commit.id()).map_err(err)?;
+        }
+        None => {
+            if walk.push_head().is_err() {
+                return Ok(Vec::new());
+            }
+        }
     }
     walk.set_sorting(git2::Sort::TIME).map_err(err)?;
 
@@ -473,30 +509,80 @@ fn log_entries(repo: &Repository, limit: usize, skip: usize) -> Result<Vec<Commi
     for oid in walk.skip(skip).take(limit) {
         let oid = oid.map_err(err)?;
         let commit = repo.find_commit(oid).map_err(err)?;
-        let author = commit.author();
-        out.push(CommitInfo {
-            oid: oid.to_string(),
-            short: short(oid),
-            summary: commit.summary().unwrap_or("").to_string(),
-            message: commit.message().unwrap_or("").to_string(),
-            author: author.name().unwrap_or("").to_string(),
-            email: author.email().unwrap_or("").to_string(),
-            time: commit.time().seconds(),
-            parents: commit.parent_ids().map(|p| p.to_string()).collect(),
-        });
+        out.push(commit_info(oid, &commit));
     }
     Ok(out)
+}
+
+fn log_entries(repo: &Repository, limit: usize, skip: usize) -> Result<Vec<CommitInfo>, String> {
+    log_entries_for(repo, limit, skip, None)
 }
 
 #[tauri::command(async)]
 pub fn get_log(
     limit: Option<usize>,
     skip: Option<usize>,
+    rev: Option<String>,
     repository: String,
 ) -> Result<Vec<CommitInfo>, String> {
     let p = PathBuf::from(&repository);
     let repo = open(&p)?;
-    log_entries(&repo, limit.unwrap_or(200), skip.unwrap_or(0))
+    log_entries_for(
+        &repo,
+        limit.unwrap_or(200),
+        skip.unwrap_or(0),
+        rev.as_deref(),
+    )
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchComparison {
+    base: String,
+    head: String,
+    base_oid: String,
+    head_oid: String,
+    ahead: usize,
+    behind: usize,
+    commits: Vec<CommitInfo>,
+}
+
+#[tauri::command(async)]
+pub fn compare_branches(
+    base: String,
+    head: String,
+    limit: Option<usize>,
+    repository: String,
+) -> Result<BranchComparison, String> {
+    let p = PathBuf::from(&repository);
+    let repo = open(&p)?;
+    let base_commit = resolve_commit(&repo, &base)?;
+    let head_commit = resolve_commit(&repo, &head)?;
+    let (ahead, behind) = repo
+        .graph_ahead_behind(head_commit.id(), base_commit.id())
+        .unwrap_or((0, 0));
+
+    let mut walk = repo.revwalk().map_err(err)?;
+    walk.push(head_commit.id()).map_err(err)?;
+    walk.hide(base_commit.id()).map_err(err)?;
+    walk.set_sorting(git2::Sort::TIME).map_err(err)?;
+
+    let mut commits = Vec::new();
+    for oid in walk.take(limit.unwrap_or(200)) {
+        let oid = oid.map_err(err)?;
+        let commit = repo.find_commit(oid).map_err(err)?;
+        commits.push(commit_info(oid, &commit));
+    }
+
+    Ok(BranchComparison {
+        base,
+        head,
+        base_oid: base_commit.id().to_string(),
+        head_oid: head_commit.id().to_string(),
+        ahead,
+        behind,
+        commits,
+    })
 }
 
 fn diff_to_string(repo: &Repository, diff: git2::Diff) -> Result<String, String> {
@@ -543,11 +629,10 @@ pub fn get_worktree_diff(
 }
 
 #[tauri::command(async)]
-pub fn get_commit_diff(oid: String, repository: String) -> Result<String, String> {
+pub fn get_commit_diff(rev: String, repository: String) -> Result<String, String> {
     let p = PathBuf::from(&repository);
     let repo = open(&p)?;
-    let oid = git2::Oid::from_str(&oid).map_err(err)?;
-    let commit = repo.find_commit(oid).map_err(err)?;
+    let commit = resolve_commit(&repo, &rev)?;
     let tree = commit.tree().map_err(err)?;
     let parent_tree = if commit.parent_count() > 0 {
         commit.parent(0).ok().and_then(|p| p.tree().ok())
@@ -1515,6 +1600,42 @@ mod tests {
         assert_eq!(page.len(), 2);
         assert_eq!(page[0].oid, all[1].oid);
         assert_eq!(page[1].oid, all[2].oid);
+    }
+
+    #[test]
+    fn resolves_branch_names_and_compares_branches() {
+        let t = init();
+        commit_file(&t.repo, "a.txt", "0");
+        let main = default_branch(&t.repo);
+        let head = t.repo.head().unwrap().peel_to_commit().unwrap();
+        t.repo.branch("feature", &head, false).unwrap();
+        t.repo.set_head("refs/heads/feature").unwrap();
+        commit_file(&t.repo, "b.txt", "1");
+        t.repo.set_head(&format!("refs/heads/{main}")).unwrap();
+        let feature_tip = t
+            .repo
+            .find_reference("refs/heads/feature")
+            .unwrap()
+            .target()
+            .unwrap()
+            .to_string();
+        let path = t.path.to_string_lossy().to_string();
+
+        let log = log_entries_for(&t.repo, 10, 0, Some("feature")).unwrap();
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].oid, feature_tip);
+
+        let comparison =
+            compare_branches(main.clone(), "feature".into(), Some(10), path.clone()).unwrap();
+        assert_eq!(comparison.ahead, 1);
+        assert_eq!(comparison.behind, 0);
+        assert_eq!(comparison.head_oid, feature_tip);
+        assert_eq!(comparison.commits.len(), 1);
+        assert_eq!(comparison.commits[0].oid, feature_tip);
+
+        let diff = get_commit_diff("feature".into(), path.clone()).unwrap();
+        assert!(diff.contains("b.txt"));
+        assert!(get_commit_diff("does-not-exist".into(), path).is_err());
     }
 
     #[test]

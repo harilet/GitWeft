@@ -80,6 +80,16 @@ export interface BranchGraph {
   head: string;
 }
 
+export interface BranchComparison {
+  base: string;
+  head: string;
+  baseOid: string;
+  headOid: string;
+  ahead: number;
+  behind: number;
+  commits: CommitInfo[];
+}
+
 export interface Snapshot {
   repo: RepoInfo;
   status: FileStatus[];
@@ -118,12 +128,29 @@ export const git = {
     authorEmail?: string,
   ) => invoke<string>("commit", { repository, message, authorName, authorEmail }),
 
-  getLog: (repository: string, limit = 300, skip = 0) =>
-    invoke<CommitInfo[]>("get_log", { repository, limit, skip }),
+  getLog: (repository: string, limit = 300, skip = 0, rev?: string | null) =>
+    invoke<CommitInfo[]>("get_log", {
+      repository,
+      limit,
+      skip,
+      rev: rev ?? null,
+    }),
   getWorktreeDiff: (repository: string, path: string | null, staged: boolean) =>
     invoke<string>("get_worktree_diff", { repository, path, staged }),
-  getCommitDiff: (repository: string, oid: string) =>
-    invoke<string>("get_commit_diff", { repository, oid }),
+  getCommitDiff: (repository: string, rev: string) =>
+    invoke<string>("get_commit_diff", { repository, rev }),
+  compareBranches: (
+    repository: string,
+    base: string,
+    head: string,
+    limit = 200,
+  ) =>
+    invoke<BranchComparison>("compare_branches", {
+      repository,
+      base,
+      head,
+      limit,
+    }),
 
   listBranches: (repository: string) =>
     invoke<BranchInfo[]>("list_branches", { repository }),
