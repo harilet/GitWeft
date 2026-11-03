@@ -23,12 +23,15 @@
   );
   const cannotPush = $derived(!app.repo || app.repo.detached || app.repo.unborn);
 
-  const nav: { key: ViewKey; label: string; count: () => number }[] = [
-    { key: "changes", label: "Changes", count: () => app.status.length },
-    { key: "history", label: "History", count: () => app.log.length },
-    { key: "branches", label: "Branches", count: () => app.branches.length },
-    { key: "tags", label: "Tags", count: () => app.tags.length },
-    { key: "stashes", label: "Stashes", count: () => app.stashes.length },
+  const nav: { key: ViewKey; label: string; count: () => string }[] = [
+    { key: "changes", label: "Changes", count: () => app.status.length.toString() },
+    { key: "history", label: "History", count: () => app.log.length.toString() },
+    { key: "branches", label: "Branches", count: () => {
+      const localBranches = app.branches.filter((b) => !b.isRemote);
+      const remoteBranches = app.branches.filter((b) => b.isRemote);
+      return localBranches.length + "/" + remoteBranches.length} },
+    { key: "tags", label: "Tags", count: () => app.tags.length.toString() },
+    { key: "stashes", label: "Stashes", count: () => app.stashes.length.toString() },
   ];
 
   function onkey(e: KeyboardEvent) {
