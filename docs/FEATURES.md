@@ -40,7 +40,8 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       accepts a choice per conflict (or both), manual editing of the merged
       result, whole-file side selection including delete/modify conflicts,
       binary-conflict handling, abort merge, and merge commits that keep all
-      parents. No AI involvement.
+      parents. An optional AI recommendation can propose a merged file, but it
+      is text-only, never writes or stages, and the user must apply and save it.
 
 ## In progress
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import { app } from "../store.svelte";
   import {
@@ -7,6 +8,12 @@
     parseConflicts,
     type ConflictChoice,
   } from "../conflicts";
+  import {
+    hasConflictMarkers,
+    isAiConfigured,
+    providerLabel,
+    suggestConflictResolution,
+  } from "../ai";
 
   const conflict = $derived(app.conflict);
   const parsed = $derived(parseConflicts(conflict?.content ?? ""));
@@ -16,6 +23,15 @@
   let manualText = $state("");
   let saving = $state(false);
   let initializedFor = $state<string | null>(null);
+
+  let aiSuggesting = $state(false);
+  let aiSuggestion = $state<string | null>(null);
+  let aiError = $state<string | null>(null);
+  let resultEditor = $state<HTMLTextAreaElement | null>(null);
+
+  const aiSuggestionHasMarkers = $derived(
+    aiSuggestion !== null && hasConflictMarkers(aiSuggestion),
+  );
 
   const resolved = $derived(buildResolved(parsed.segments, choices));
 
@@ -39,6 +55,50 @@
     } else {
       manual = false;
     }
+  }
+
+  async function suggestWithAi() {
+    const file = app.conflict;
+    if (!file || aiSuggesting) return;
+
+    const config = app.aiConfig;
+    if (!isAiConfigured(config)) {
+      app.notify("Configure an AI provider in Settings → AI", "error");
+      app.openAiSettings();
+      return;
+    }
+
+    aiSuggesting = true;
+    aiError = null;
+    try {
+      aiSuggestion = await suggestConflictResolution(config, {
+        path: file.path,
+        content: file.content,
+        ours: file.ours,
+        theirs: file.theirs,
+        base: file.base,
+        hasOurs: file.hasOurs,
+        hasTheirs: file.hasTheirs,
+        binary: file.binary,
+      });
+    } catch (e) {
+      aiError = typeof e === "string" ? e : String(e);
+    } finally {
+      aiSuggesting = false;
+    }
+  }
+
+  async function applySuggestion() {
+    if (aiSuggestion === null) return;
+    manualText = aiSuggestion;
+    manual = true;
+    await tick();
+    resultEditor?.scrollIntoView({ block: "center", behavior: "smooth" });
+    resultEditor?.focus();
+    app.notify(
+      "AI suggestion loaded into the editor. Review it, then save to resolve.",
+      "success",
+    );
   }
 
   async function takeSide(side: "ours" | "theirs" | "base") {
@@ -263,6 +323,75 @@
             </article>
           {/each}
 
+          <section class="ai-box">
+            <div class="ai-head">
+              <div class="ai-titles">
+                <span class="label">AI recommendation</span>
+                {#if app.aiConfigured}
+                  <span class="ai-model"
+                    >{providerLabel(app.aiConfig.provider)} ·
+                    {app.aiConfig.model}</span
+                  >
+                {/if}
+              </div>
+              <div class="row">
+                {#if aiSuggestion !== null}
+                  <button
+                    class="btn ghost sm"
+                    disabled={aiSuggesting}
+                    onclick={() => {
+                      aiSuggestion = null;
+                      aiError = null;
+                    }}>Dismiss</button
+                  >
+                {/if}
+                <button
+                  class="btn ghost sm"
+                  disabled={aiSuggesting}
+                  onclick={suggestWithAi}
+                >
+                  {aiSuggesting
+                    ? "Asking the model…"
+                    : aiSuggestion !== null
+                      ? "Regenerate"
+                      : "Suggest with AI"}
+                </button>
+              </div>
+            </div>
+
+            {#if aiError}
+              <div class="ai-error">{aiError}</div>
+            {:else if aiSuggesting}
+              <p class="ai-hint">
+                Waiting for the model. Nothing is changed until you accept the
+                suggestion and save.
+              </p>
+            {:else if aiSuggestion !== null}
+              {#if aiSuggestionHasMarkers}
+                <div class="note">
+                  The suggestion still contains conflict markers. Review it
+                  carefully before using it.
+                </div>
+              {/if}
+              <pre class="ai-preview main-scrollbar">{aiSuggestion}</pre>
+              <div class="ai-actions">
+                <button class="btn sm" onclick={applySuggestion}
+                  >Apply to editor</button
+                >
+                <span class="ai-note">
+                  The AI only recommends. Apply it, edit it if needed, then press
+                  Save &amp; mark resolved.
+                </span>
+              </div>
+            {:else}
+              <p class="ai-hint">
+                Ask the configured provider to recommend a merged file. The
+                assistant cannot write, stage or commit; you review the
+                suggestion and decide whether to use it.
+              </p>
+            {/if}
+          </section>
+
           <section class="result">
             <div class="result-head">
               <span class="label"
@@ -278,6 +407,7 @@
               <textarea
                 class="textarea result-editor"
                 spellcheck="false"
+                bind:this={resultEditor}
                 bind:value={manualText}
               ></textarea>
             {:else}
@@ -319,7 +449,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 150;
+    z-index: 90;
   }
   .modal {
     width: min(1120px, 95vw);
@@ -463,6 +593,73 @@
   }
   .side.theirs.chosen {
     background: rgba(209, 176, 107, 0.08);
+  }
+
+  .ai-box {
+    border: 1px solid var(--border-color);
+    background: var(--surface-2);
+    margin-bottom: 16px;
+  }
+  .ai-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+  }
+  .ai-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .ai-model {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ai-hint {
+    margin: 0;
+    padding: 12px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--muted-color);
+  }
+  .ai-error {
+    padding: 10px 12px;
+    background: #3a1d20;
+    border-bottom: 1px solid #5c2427;
+    color: #ffd0cb;
+    font-size: 11px;
+    white-space: pre-wrap;
+  }
+  .ai-preview {
+    margin: 0;
+    padding: 12px;
+    max-height: 260px;
+    overflow: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .ai-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+  }
+  .ai-note {
+    font-size: 10px;
+    color: var(--muted-color);
   }
 
   .result {

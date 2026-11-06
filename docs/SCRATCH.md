@@ -7,13 +7,17 @@ Append dated entries, keep the top current, prune what is obvious from code.
 Merge conflict resolution shipped: a dedicated conflict list and merge banner in
 Changes, a side-by-side ours/base/theirs resolver with per-conflict choices,
 manual editing, whole-file/delete handling, binary conflicts, abort merge, and
-merge-aware commits. Next session should smoke-test a real conflicting merge end
-to end, then pick the next feature.
+merge-aware commits. The resolver now also has an optional AI recommendation:
+the model returns suggested file contents and the user must explicitly apply and
+save it. Next session should smoke-test the AI suggestion with a real conflict
+and a configured Ollama or OpenAI provider.
 
 ## Next up
 
 - Manual smoke test with a real conflicting merge: resolve per conflict, save,
   commit the merge and verify both parents appear in history.
+- Exercise the AI recommendation with Ollama and OpenAI, and confirm that
+  dismissing or closing it never changes the repository.
 - Also exercise delete/modify and binary conflicts, plus Abort merge.
 - Pick the next feature from `docs/FEATURES.md` Ideas.
 
@@ -33,10 +37,15 @@ to end, then pick the next feature.
   `npm run build` both compile the same components correctly.
 - AI provider settings (including API keys) live in `localStorage` under
   `gitweft.ai`; they are not encrypted.
+- AI conflict recommendations send the conflict text to the configured provider.
+  They are text-only, capped at about 120k characters, unavailable for binary
+  conflicts, and never applied automatically. The model may leave conflict
+  markers; the resolver warns and the user must review before saving.
 - AI requests are non-streaming and time out after 180 seconds; tool progress is
   shown as status text, not tokens.
-- Models must support tool calling. A model that cannot call tools will answer
-  from the conversation without inspecting the repository.
+- The assistant's repository tools require a model with tool calling. A model
+  that cannot call tools will answer from the conversation without inspecting the
+  repository. Conflict recommendations use a plain chat request without tools.
 - The tool loop stops after 8 rounds and truncates individual tool results at
   60,000 characters.
 - `reqwest` is built with `native-tls`, so the existing `libssl-dev` prerequisite
@@ -47,15 +56,19 @@ to end, then pick the next feature.
   `0.1.4`. Check before packaging.
 - No CI workflow. Validation is manual: `npm run check`, `npm run build`,
   `cargo test`, `cargo clippy --all-targets`, `cargo fmt --check`.
-- No frontend lint/format script and no frontend tests; backend has 16 unit tests.
+- No frontend lint/format script and no frontend tests; backend has 18 unit tests.
 - Fetch/pull/push/clone require system `git` and configured credentials.
 - Root `FEATURES.md` and `README.md` predate this flow; `docs/FEATURES.md` is the
   canonical living scope.
 
 ## Decisions
 
-- 2026-11-06 — Merge conflict resolution is fully user-driven; no AI tool or
-  write path is involved. Why: conflict choices need explicit human review.
+- 2026-11-06 — AI conflict advice is recommendation-only: it uses a plain chat
+  request with no tools, returns file contents, and never writes or stages. The
+  user must apply the suggestion to the editor and then explicitly save. Why:
+  conflict resolution needs human review and a clear accept step.
+- 2026-11-06 — Manual conflict resolution is fully user-driven; the resolver
+  exposes no AI write path. Why: conflict choices need explicit human review.
 - 2026-11-06 — Whole-file side resolution uses index stages 1/2/3 (base/ours/
   theirs) instead of parsing the working file. Why: it handles binary blobs and
   delete/modify conflicts, where one side has no file at all.
@@ -84,6 +97,19 @@ to end, then pick the next feature.
 
 ## Session log
 
+### 2026-11-06 — AI conflict recommendations
+
+- Added `suggestConflictResolution` in `src/lib/ai.ts`: a plain, tool-free chat
+  request that sends the conflict markers (or stage versions for marker-less
+  conflicts) and asks for the complete resolved file.
+- Added `normalizeSuggestedFile` and `hasConflictMarkers`; suggestions preserve
+  the original LF/CRLF style and are capped at about 120k characters.
+- `ConflictResolver.svelte` now has an AI recommendation panel with Suggest /
+  Regenerate / Dismiss, a read-only preview, and Apply to editor. Applying only
+  fills the manual editor; `Save & mark resolved` remains the sole write.
+- The model receives no tools and cannot stage, commit or modify anything.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK.
+
 ### 2026-11-06 — Merge conflict resolver
 
 - Added `get_conflict`, `resolve_conflict` and `abort_merge`; `RepoInfo.merging`
@@ -103,7 +129,8 @@ to end, then pick the next feature.
   delete actions, binary conflict handling, and Save & mark resolved.
 - Merge/pull now refresh the snapshot even when Git exits with a conflict, so the
   resolver appears without a manual refresh.
-- AI is untouched; conflicts are resolved only by explicit user choices.
+- Conflict resolution stays explicit; the AI recommendation flow above was added
+  later and never auto-applies or stages.
 - Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
   `cargo test` 18 passed; `cargo clippy --all-targets` clean; `cargo fmt --check`
   clean.

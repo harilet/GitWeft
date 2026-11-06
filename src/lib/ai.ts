@@ -454,7 +454,11 @@ async function executeTool(
   }
 }
 
-async function chat(config: AiConfig, messages: AiMessage[]): Promise<AiChatResponse> {
+async function chat(
+  config: AiConfig,
+  messages: AiMessage[],
+  tools: AiToolDef[] = AI_TOOLS,
+): Promise<AiChatResponse> {
   return invokeAiChat({
     provider: config.provider,
     baseUrl: config.baseUrl,
@@ -462,7 +466,7 @@ async function chat(config: AiConfig, messages: AiMessage[]): Promise<AiChatResp
     model: config.model,
     temperature: config.temperature,
     messages,
-    tools: AI_TOOLS,
+    tools,
   });
 }
 
@@ -569,4 +573,105 @@ export function normalizeCommitMessage(text: string): string {
     value = value.slice(1, -1).trim();
   }
   return value;
+}
+
+export interface ConflictSuggestionInput {
+  path: string;
+  content: string;
+  ours: string | null;
+  theirs: string | null;
+  base: string | null;
+  hasOurs: boolean;
+  hasTheirs: boolean;
+  binary: boolean;
+}
+
+const CONFLICT_SYSTEM_PROMPT = `You are GitWeft's merge conflict advisor.
+
+Rules:
+- You cannot write, stage, commit or modify the repository. You only return a recommendation for the user to review.
+- Return ONLY the complete resolved file content. Do not add explanations, commentary or Markdown code fences.
+- Remove every conflict marker (<<<<<<<, |||||||, =======, >>>>>>>).
+- Preserve all lines that are not part of a conflict exactly, including indentation and blank lines.
+- Combine both sides when both changes are needed. Otherwise choose the coherent result.
+- If you cannot produce a safe merge, return the working file unchanged.`;
+
+const MAX_CONFLICT_CHARS = 120_000;
+const CONFLICT_MARKERS = /^(?:<{7}|={7}|>{7}|\|{7})/m;
+
+function fenced(label: string, text: string): string {
+  return `${label}\n\`\`\`\n${text}\n\`\`\``;
+}
+
+export function hasConflictMarkers(text: string): boolean {
+  return CONFLICT_MARKERS.test(text);
+}
+
+export function normalizeSuggestedFile(text: string): string {
+  let value = text.replace(/^\uFEFF/, "");
+  const fenced = value.match(/^\s*```[a-zA-Z0-9_-]*\r?\n([\s\S]*?)\r?\n```\s*$/);
+  if (fenced) value = fenced[1];
+  return value;
+}
+
+export async function suggestConflictResolution(
+  config: AiConfig,
+  input: ConflictSuggestionInput,
+): Promise<string> {
+  if (input.binary) {
+    throw new Error("Binary conflicts cannot be merged by the assistant.");
+  }
+
+  const markers = hasConflictMarkers(input.content);
+  const sections = [`File: ${input.path}`];
+  if (markers) {
+    sections.push(fenced("Working tree with conflict markers:", input.content));
+  } else {
+    sections.push(
+      [
+        "The working file has no conflict markers.",
+        fenced(
+          `Ours (${input.hasOurs ? "present" : "deleted"}):`,
+          input.ours ?? "[deleted]",
+        ),
+        fenced(
+          `Theirs (${input.hasTheirs ? "present" : "deleted"}):`,
+          input.theirs ?? "[deleted]",
+        ),
+        input.base !== null ? fenced("Base (common ancestor):", input.base) : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    );
+  }
+  sections.push("Return the complete resolved file now.");
+
+  const prompt = sections.join("\n\n");
+  if (prompt.length > MAX_CONFLICT_CHARS) {
+    throw new Error(
+      `This conflict is too large to send to AI (${prompt.length} characters). Resolve it manually.`,
+    );
+  }
+
+  const response = await chat(
+    config,
+    [
+      { role: "system", content: CONFLICT_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+    [],
+  );
+
+  let suggestion = normalizeSuggestedFile(response.content);
+  if (!suggestion.trim()) {
+    throw new Error("The model returned an empty suggestion.");
+  }
+
+  // Keep the file's existing line-ending style when the model returns LF.
+  if (input.content.includes("\r\n")) {
+    suggestion = suggestion.replace(/\r?\n/g, "\r\n");
+  } else {
+    suggestion = suggestion.replace(/\r\n/g, "\n");
+  }
+  return suggestion;
 }

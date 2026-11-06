@@ -46,7 +46,7 @@ Last verified 2026-11-06: `npm run check` 0 errors/0 warnings; `npm run build` O
 | `src/lib/store.svelte.ts` | `AppStore` + `RepoSession`: multi-repo state, refresh, all actions, recents, auto-fetch, progress listener. |
 | `src/lib/recents.ts` | Recent-project persistence (localStorage, pin/sort, max 30). |
 | `src/lib/settings.ts` | Accent presets, validation, persistence and CSS variables. |
-| `src/lib/ai.ts` | AI provider config, localStorage settings (app + repo overrides), read-only tool schemas/executors and the agent tool loop. |
+| `src/lib/ai.ts` | AI provider config, localStorage settings (app + repo overrides), read-only tool schemas/executors, the agent tool loop, and conflict recommendations. |
 | `src/lib/format.ts` | Relative/absolute time formatting and unified-patch parser. |
 | `src/lib/conflicts.ts` | Conflict-marker parser and merged-result builder (ours/base/theirs/both). |
 | `src/lib/actions.ts` | `autofocus` Svelte action. |
@@ -62,7 +62,7 @@ Last verified 2026-11-06: `npm run check` 0 errors/0 warnings; `npm run build` O
 | `src/lib/components/Settings.svelte` | Appearance, Git identity (local/global), AI provider/scope settings and error-log dialogs. |
 | `src/lib/components/AiPanel.svelte` | Read-only AI assistant drawer: chat, tool activity, commit-message generation/insert. |
 | `src/lib/components/DiffView.svelte` | Renders a parsed patch with line markers/numbers. |
-| `src/lib/components/ConflictResolver.svelte` | Merge conflict resolver: conflict list, ours/base/theirs choices, manual edit, whole-file/delete actions. |
+| `src/lib/components/ConflictResolver.svelte` | Merge conflict resolver: conflict list, ours/base/theirs choices, manual edit, whole-file/delete actions, optional AI recommendation (user-applied only). |
 | `src/lib/components/Modal.svelte` | Shared modal shell, backdrop/Esc handling. |
 | `src/app.css` | Global theme and shared component styles. |
 | `src-tauri/src/git.rs` | All Git commands, data structs, network CLI runner, unit tests. |
@@ -118,6 +118,8 @@ log, branches, graph, remotes, tags, stashes and user config for one refresh.
 - **AI is read-only:** the assistant may inspect repository info, commits, branches,
   status and diffs through tools, but must never stage, unstage, commit, discard,
   checkout, push or otherwise write. Do not add write tools to `src/lib/ai.ts`.
+  Conflict recommendations are plain tool-free chat: they return text, and the
+  user must explicitly apply and save the suggestion.
 
 ## Gotchas
 
