@@ -4,19 +4,33 @@ Append dated entries, keep the top current, prune what is obvious from code.
 
 ## Current focus
 
-AI assistant shipped: read-only chat/tool loop over Ollama and OpenAI, app-level
-and per-repository provider settings, commit-message generation from Changes, and
-branch/ref-aware history plus branch comparison. Next session should smoke-test an
-OpenAI key and review the tool loop with a non-tool-capable model.
+Merge conflict resolution shipped: a dedicated conflict list and merge banner in
+Changes, a side-by-side ours/base/theirs resolver with per-conflict choices,
+manual editing, whole-file/delete handling, binary conflicts, abort merge, and
+merge-aware commits. Next session should smoke-test a real conflicting merge end
+to end, then pick the next feature.
 
 ## Next up
 
-- Manual provider smoke test: Ollama (`llama3.2` or another tool-capable model) and
-  OpenAI (`gpt-4o-mini`), including a generated commit message.
+- Manual smoke test with a real conflicting merge: resolve per conflict, save,
+  commit the merge and verify both parents appear in history.
+- Also exercise delete/modify and binary conflicts, plus Abort merge.
 - Pick the next feature from `docs/FEATURES.md` Ideas.
 
 ## Known issues / watch-outs
 
+- The conflict resolver handles merge/pull conflicts (`RepositoryState::Merge`);
+  rebase and cherry-pick conflicts are not covered yet.
+- Conflict blocks are parsed from the working-tree markers. Merge, diff3 and
+  zdiff3 styles plus CRLF are supported; a file without markers opens in manual
+  edit mode.
+- Merge commits read `MERGE_HEAD` and clean `MERGE_HEAD` / `MERGE_MSG` /
+  `MERGE_MODE`; the commit message is not prefilled from `MERGE_MSG`.
+- Dev-only: if Vite reports an error in
+  `*.svelte?svelte&type=style&lang.css` whose code frame shows the Svelte
+  script/template, `vite-plugin-svelte` missed its virtual CSS cache during HMR.
+  The source is fine; restart `npm run tauri dev`. A clean server load and
+  `npm run build` both compile the same components correctly.
 - AI provider settings (including API keys) live in `localStorage` under
   `gitweft.ai`; they are not encrypted.
 - AI requests are non-streaming and time out after 180 seconds; tool progress is
@@ -40,6 +54,14 @@ OpenAI key and review the tool loop with a non-tool-capable model.
 
 ## Decisions
 
+- 2026-11-06 — Merge conflict resolution is fully user-driven; no AI tool or
+  write path is involved. Why: conflict choices need explicit human review.
+- 2026-11-06 — Whole-file side resolution uses index stages 1/2/3 (base/ours/
+  theirs) instead of parsing the working file. Why: it handles binary blobs and
+  delete/modify conflicts, where one side has no file at all.
+- 2026-11-06 — `commit` now includes every `MERGE_HEAD` parent and clears merge
+  state after a successful commit. Why: the old single-parent commit finished the
+  working tree but produced a non-merge commit and left the merge in progress.
 - 2026-11-03 — AI is read-only by construction: the tool set only reads repository
   info, commits, branches, status and diffs. No write command is exposed to the
   model, regardless of provider.
@@ -61,6 +83,30 @@ OpenAI key and review the tool loop with a non-tool-capable model.
   requested doc flow while giving agents one current source.
 
 ## Session log
+
+### 2026-11-06 — Merge conflict resolver
+
+- Added `get_conflict`, `resolve_conflict` and `abort_merge`; `RepoInfo.merging`
+  tracks an in-progress merge. Conflict reads return the working file plus index
+  stages 1/2/3 and binary detection.
+- Resolution can stage custom merged text or copy a whole stage, including
+  deleting the file when the chosen side removed it.
+- Fixed merge commits to include every `MERGE_HEAD` parent and clean
+  `MERGE_HEAD` / `MERGE_MSG` / `MERGE_MODE`, so committing after a resolved merge
+  records a real merge commit and leaves the repository clean.
+- Added `src/lib/conflicts.ts`: marker parser for merge/diff3/zdiff3 styles with
+  CRLF support, default choices and merged-result builder.
+- Changes now separates conflicted files, shows a merge banner with Abort merge,
+  and keeps conflicts out of the staged/unstaged lists until resolved.
+- Added `ConflictResolver.svelte`: side-by-side ours/base/theirs blocks with
+  ours/base/theirs/both choices, manual merged-file editing, whole-file side and
+  delete actions, binary conflict handling, and Save & mark resolved.
+- Merge/pull now refresh the snapshot even when Git exits with a conflict, so the
+  resolver appears without a manual refresh.
+- AI is untouched; conflicts are resolved only by explicit user choices.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  `cargo test` 18 passed; `cargo clippy --all-targets` clean; `cargo fmt --check`
+  clean.
 
 ### 2026-11-03 — AI assistant with read-only Git tools
 

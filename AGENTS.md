@@ -23,7 +23,7 @@ npm run preview             # preview the frontend build
 npm run check               # svelte-kit sync + svelte-check (TS/Svelte diagnostics)
 npm run tauri build         # release desktop bundle (deb only)
 
-cd src-tauri && cargo test                 # 16 unit tests in git.rs + ai.rs
+cd src-tauri && cargo test                 # 18 unit tests in git.rs + ai.rs
 cd src-tauri && cargo clippy --all-targets # Rust lint
 cd src-tauri && cargo fmt --check          # Rust format check; use cargo fmt to write
 ```
@@ -32,8 +32,8 @@ There is **no separate npm lint or format script** (no ESLint/Prettier config).
 Frontend validation is `npm run check`; Rust lint/format are the cargo commands.
 There is no CI workflow in the repo — run the checks manually.
 
-Last verified 2026-11-03: `npm run check` 0 errors/0 warnings; `npm run build` OK;
-`cargo test` 16 passed; `cargo clippy --all-targets` clean; `cargo fmt --check` clean.
+Last verified 2026-11-06: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+`cargo test` 18 passed; `cargo clippy --all-targets` clean; `cargo fmt --check` clean.
 
 ## Architecture map
 
@@ -48,6 +48,7 @@ Last verified 2026-11-03: `npm run check` 0 errors/0 warnings; `npm run build` O
 | `src/lib/settings.ts` | Accent presets, validation, persistence and CSS variables. |
 | `src/lib/ai.ts` | AI provider config, localStorage settings (app + repo overrides), read-only tool schemas/executors and the agent tool loop. |
 | `src/lib/format.ts` | Relative/absolute time formatting and unified-patch parser. |
+| `src/lib/conflicts.ts` | Conflict-marker parser and merged-result builder (ours/base/theirs/both). |
 | `src/lib/actions.ts` | `autofocus` Svelte action. |
 | `src/lib/components/Welcome.svelte` | Start screen: recents, open/init/clone dialogs. |
 | `src/lib/components/TitleBar.svelte` | Frameless title bar, project tabs, window controls. |
@@ -61,6 +62,7 @@ Last verified 2026-11-03: `npm run check` 0 errors/0 warnings; `npm run build` O
 | `src/lib/components/Settings.svelte` | Appearance, Git identity (local/global), AI provider/scope settings and error-log dialogs. |
 | `src/lib/components/AiPanel.svelte` | Read-only AI assistant drawer: chat, tool activity, commit-message generation/insert. |
 | `src/lib/components/DiffView.svelte` | Renders a parsed patch with line markers/numbers. |
+| `src/lib/components/ConflictResolver.svelte` | Merge conflict resolver: conflict list, ours/base/theirs choices, manual edit, whole-file/delete actions. |
 | `src/lib/components/Modal.svelte` | Shared modal shell, backdrop/Esc handling. |
 | `src/app.css` | Global theme and shared component styles. |
 | `src-tauri/src/git.rs` | All Git commands, data structs, network CLI runner, unit tests. |

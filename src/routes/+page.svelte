@@ -9,6 +9,7 @@
   import Stashes from "$lib/components/Stashes.svelte";
   import Settings from "$lib/components/Settings.svelte";
   import AiPanel from "$lib/components/AiPanel.svelte";
+  import ConflictResolver from "$lib/components/ConflictResolver.svelte";
   import DiffView from "$lib/components/DiffView.svelte";
   import BranchSwitcher from "$lib/components/BranchSwitcher.svelte";
   import TitleBar from "$lib/components/TitleBar.svelte";
@@ -217,6 +218,12 @@
 
 {#if app.aiOpen}
   <AiPanel />
+{/if}
+
+{#if app.conflict}
+  {#key app.conflict.path}
+    <ConflictResolver />
+  {/key}
 {/if}
 
 <style>

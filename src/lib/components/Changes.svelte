@@ -6,8 +6,17 @@
   let selected = $state<string | null>(null);
   let committing = $state(false);
 
+  const conflicts = $derived(app.conflicts);
+  const hasConflicts = $derived(conflicts.length > 0);
+  const staged = $derived(app.staged.filter((f) => !isConflict(f)));
+  const unstaged = $derived(app.unstaged.filter((f) => !isConflict(f)));
+
+  function isConflict(file: FileStatus) {
+    return file.index === "U" || file.worktree === "U";
+  }
+
   async function submitCommit() {
-    if (!app.commitMessage.trim() || app.staged.length === 0) return;
+    if (!app.commitMessage.trim() || staged.length === 0 || hasConflicts) return;
     committing = true;
     const ok = await app.commit(app.commitMessage);
     committing = false;
@@ -25,20 +34,78 @@
   function codeClass(c: string) {
     return `code-${c === "?" ? "\\?" : c}`;
   }
+
+  async function abortMerge() {
+    if (await confirm("Abort the merge and restore the pre-merge state?"))
+      app.abortMerge();
+  }
 </script>
 
 <div class="changes">
+  {#if app.repo?.merging}
+    <div class="merge-banner" class:ready={!hasConflicts}>
+      <div class="merge-text">
+        <span class="label"
+          >{hasConflicts ? "Merge in progress" : "Merge ready"}</span
+        >
+        <span class="merge-hint">
+          {hasConflicts
+            ? `${conflicts.length} conflicted file${conflicts.length === 1 ? "" : "s"} — resolve them, then commit.`
+            : "All conflicts are resolved. Commit to finish the merge."}
+        </span>
+      </div>
+      {#if hasConflicts}
+        <button class="btn ghost sm danger-text" onclick={abortMerge}
+          >Abort merge</button
+        >
+      {/if}
+    </div>
+  {/if}
+
+  {#if hasConflicts}
+    <section class="list conflicts">
+      <div class="panel-head">
+        <span class="label">Conflicts &middot; {conflicts.length}</span>
+        <span class="label">Resolve before committing</span>
+      </div>
+      <div class="files main-scrollbar">
+        {#each conflicts as file (file.path)}
+          <div
+            class="file conflict"
+            role="button"
+            tabindex="0"
+            onclick={() => app.openConflict(file.path)}
+            onkeydown={(e) => e.key === "Enter" && app.openConflict(file.path)}
+          >
+            <span class="file-status-code code-U">!</span>
+            <span class="path">{file.path}</span>
+            <div class="actions">
+              <button
+                class="btn ghost sm act"
+                title="Open the conflict resolver"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  app.openConflict(file.path);
+                }}>Resolve</button
+              >
+            </div>
+          </div>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
   <section class="list staged">
     <div class="panel-head">
-      <span class="label">Staged &middot; {app.staged.length}</span>
+      <span class="label">Staged &middot; {staged.length}</span>
       <button
         class="btn ghost sm"
-        disabled={app.staged.length === 0}
+        disabled={staged.length === 0}
         onclick={() => app.unstageAll()}>Unstage all</button
       >
     </div>
     <div class="files main-scrollbar">
-      {#each app.staged as file (file.path)}
+      {#each staged as file (file.path)}
         <div
           class="file"
           class:selected={selected === file.path + ":staged"}
@@ -86,15 +153,16 @@
     <div class="row">
       <button
         class="btn primary"
-        disabled={committing || !app.commitMessage.trim() || app.staged.length === 0}
+        disabled={committing || !app.commitMessage.trim() || staged.length === 0 || hasConflicts}
         onclick={submitCommit}
       >
-        {committing ? "Committing…" : `Commit ${app.staged.length || ""}`}
+        {committing ? "Committing…" : `Commit ${staged.length || ""}`}
       </button>
       <span class="spacer"></span>
       <button
         class="btn"
-        disabled={app.unstaged.length === 0}
+        disabled={unstaged.length === 0 || hasConflicts}
+        title={hasConflicts ? "Resolve all conflicts before staging everything" : ""}
         onclick={() => app.stageAll()}>Stage all</button
       >
     </div>
@@ -107,11 +175,11 @@
 
   <section class="list unstaged">
     <div class="panel-head">
-      <span class="label">Changes &middot; {app.unstaged.length}</span>
+      <span class="label">Changes &middot; {unstaged.length}</span>
       <span class="label">Working tree</span>
     </div>
     <div class="files main-scrollbar">
-      {#each app.unstaged as file (file.path)}
+      {#each unstaged as file (file.path)}
         <div
           class="file"
           class:selected={selected === file.path + ":work"}
@@ -165,6 +233,62 @@
   }
   .list.staged {
     max-height: 34%;
+  }
+  .list.conflicts {
+    flex: 0 1 auto;
+    max-height: 30%;
+  }
+  .merge-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #2a2410;
+    border-bottom: 1px solid #4a3a12;
+    flex: 0 0 auto;
+  }
+  .merge-banner.ready {
+    background: #12261a;
+    border-bottom-color: #25452f;
+  }
+  .merge-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+  }
+  .merge-banner .label {
+    color: var(--yellow);
+  }
+  .merge-banner.ready .label {
+    color: var(--green);
+  }
+  .merge-hint {
+    font-size: 11px;
+    color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .danger-text {
+    color: var(--red);
+  }
+  .danger-text:hover {
+    color: #ffd0cb;
+    border-color: var(--red);
+  }
+  .file.conflict {
+    border-left-color: var(--yellow);
+  }
+  .file.conflict:hover {
+    background: #2a2410;
+  }
+  .file.conflict .act {
+    opacity: 1;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
   }
   .files {
     flex: 1;

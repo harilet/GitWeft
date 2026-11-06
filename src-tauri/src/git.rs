@@ -53,6 +53,7 @@ pub struct RepoInfo {
     dirty: bool,
     ahead: usize,
     behind: usize,
+    merging: bool,
 }
 
 #[derive(Serialize)]
@@ -63,6 +64,22 @@ pub struct FileStatus {
     worktree: String,
     staged: bool,
     unstaged: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictFile {
+    path: String,
+    /// Working-tree contents. Empty for binary files and missing paths.
+    content: String,
+    binary: bool,
+    /// Text versions from index stages 2 (ours), 3 (theirs) and 1 (base).
+    ours: Option<String>,
+    theirs: Option<String>,
+    base: Option<String>,
+    has_ours: bool,
+    has_theirs: bool,
+    has_base: bool,
 }
 
 #[derive(Serialize)]
@@ -214,6 +231,7 @@ fn repo_info(path: &Path, repo: &Repository, dirty: bool) -> RepoInfo {
         dirty,
         ahead,
         behind,
+        merging: matches!(repo.state(), git2::RepositoryState::Merge),
     }
 }
 
@@ -369,6 +387,142 @@ pub fn get_status(repository: String) -> Result<Vec<FileStatus>, String> {
     status_entries(&repo)
 }
 
+fn safe_join(workdir: &Path, path: &str) -> Result<PathBuf, String> {
+    let rel = Path::new(path);
+    if rel.is_absolute()
+        || rel
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err("Invalid repository path".to_string());
+    }
+    Ok(workdir.join(rel))
+}
+
+fn blob_as_text(repo: &Repository, oid: Option<git2::Oid>) -> (bool, Option<String>) {
+    let Some(blob) = oid.and_then(|o| repo.find_blob(o).ok()) else {
+        return (false, None);
+    };
+    if blob.content().contains(&0) {
+        return (true, None);
+    }
+    match std::str::from_utf8(blob.content()) {
+        Ok(text) => (false, Some(text.to_string())),
+        Err(_) => (true, None),
+    }
+}
+
+#[tauri::command(async)]
+pub fn get_conflict(path: String, repository: String) -> Result<ConflictFile, String> {
+    let p = PathBuf::from(&repository);
+    let repo = open(&p)?;
+    let index = repo.index().map_err(err)?;
+    let rel = Path::new(&path);
+
+    let base_oid = index.get_path(rel, 1).map(|e| e.id);
+    let ours_oid = index.get_path(rel, 2).map(|e| e.id);
+    let theirs_oid = index.get_path(rel, 3).map(|e| e.id);
+    if base_oid.is_none() && ours_oid.is_none() && theirs_oid.is_none() {
+        return Err(format!("No conflict found for {path}"));
+    }
+
+    let (base_binary, base) = blob_as_text(&repo, base_oid);
+    let (ours_binary, ours) = blob_as_text(&repo, ours_oid);
+    let (theirs_binary, theirs) = blob_as_text(&repo, theirs_oid);
+    let mut binary = base_binary || ours_binary || theirs_binary;
+
+    let full = safe_join(repo.workdir().unwrap_or(&p), &path)?;
+    let content = match std::fs::read(&full) {
+        Ok(bytes) if bytes.contains(&0) => {
+            binary = true;
+            String::new()
+        }
+        Ok(bytes) => match String::from_utf8(bytes) {
+            Ok(text) => text,
+            Err(_) => {
+                binary = true;
+                String::new()
+            }
+        },
+        Err(_) => String::new(),
+    };
+
+    Ok(ConflictFile {
+        path,
+        content,
+        binary,
+        ours,
+        theirs,
+        base,
+        has_ours: ours_oid.is_some(),
+        has_theirs: theirs_oid.is_some(),
+        has_base: base_oid.is_some(),
+    })
+}
+
+#[tauri::command(async)]
+pub fn resolve_conflict(
+    path: String,
+    side: Option<String>,
+    content: Option<String>,
+    repository: String,
+) -> Result<(), String> {
+    let p = PathBuf::from(&repository);
+    let repo = open(&p)?;
+    let workdir = repo.workdir().unwrap_or(&p);
+    let full = safe_join(workdir, &path)?;
+    let mut index = repo.index().map_err(err)?;
+
+    if let Some(side) = side {
+        let stage = match side.as_str() {
+            "ours" => 2,
+            "theirs" => 3,
+            "base" => 1,
+            other => return Err(format!("Unknown conflict side '{other}'")),
+        };
+        match index.get_path(Path::new(&path), stage) {
+            Some(entry) => {
+                let blob = repo.find_blob(entry.id).map_err(err)?;
+                if let Some(parent) = full.parent() {
+                    std::fs::create_dir_all(parent).map_err(err)?;
+                }
+                std::fs::write(&full, blob.content()).map_err(err)?;
+                index.add_path(Path::new(&path)).map_err(err)?;
+            }
+            None => {
+                // The chosen side does not have this file (delete/modify
+                // conflict), so resolving it means deleting the path.
+                if full.is_dir() {
+                    std::fs::remove_dir_all(&full).map_err(err)?;
+                } else if full.exists() {
+                    std::fs::remove_file(&full).map_err(err)?;
+                }
+                index.remove_path(Path::new(&path)).map_err(err)?;
+            }
+        }
+    } else {
+        let content = content.ok_or("Missing conflict resolution content")?;
+        if let Some(parent) = full.parent() {
+            std::fs::create_dir_all(parent).map_err(err)?;
+        }
+        std::fs::write(&full, content).map_err(err)?;
+        index.add_path(Path::new(&path)).map_err(err)?;
+    }
+
+    // add_path usually resolves the conflict entries for this path; ignore the
+    // returned error when they are already gone.
+    let _ = index.conflict_remove(Path::new(&path));
+    index.write().map_err(err)?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn abort_merge(repository: String) -> Result<(), String> {
+    let p = PathBuf::from(&repository);
+    run_git(&p, &["merge", "--abort"])?;
+    Ok(())
+}
+
 fn stage_path(repo: &Repository, path: &str) -> Result<(), String> {
     let mut index = repo.index().map_err(err)?;
     let full = repo.workdir().unwrap_or_else(|| Path::new(".")).join(path);
@@ -478,10 +632,46 @@ pub fn commit(
     };
 
     let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
-    let parents: Vec<&git2::Commit> = parent.iter().collect();
+
+    // A merge commit needs every entry from MERGE_HEAD as an additional parent.
+    // Read it directly because libgit2 does not expose merge-head commits for
+    // repository state; system git writes one SHA per line.
+    let mut merge_parents: Vec<git2::Commit> = Vec::new();
+    let merging = matches!(repo.state(), git2::RepositoryState::Merge);
+    if merging && let Ok(text) = std::fs::read_to_string(repo.path().join("MERGE_HEAD")) {
+        for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            let Ok(oid) = git2::Oid::from_str(line) else {
+                continue;
+            };
+            let Ok(commit) = repo.find_commit(oid) else {
+                continue;
+            };
+            let already = parent.as_ref().map(|p| p.id()) == Some(commit.id())
+                || merge_parents.iter().any(|p| p.id() == commit.id());
+            if !already {
+                merge_parents.push(commit);
+            }
+        }
+    }
+
+    let mut parents: Vec<&git2::Commit> = Vec::new();
+    if let Some(parent) = &parent {
+        parents.push(parent);
+    }
+    for commit in &merge_parents {
+        parents.push(commit);
+    }
+
     let oid = repo
         .commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
         .map_err(|e| e.message().to_string())?;
+
+    if merging {
+        for file in ["MERGE_HEAD", "MERGE_MSG", "MERGE_MODE"] {
+            let _ = std::fs::remove_file(repo.path().join(file));
+        }
+    }
+
     Ok(oid.to_string())
 }
 
@@ -1524,6 +1714,24 @@ mod tests {
         repo.head().unwrap().shorthand().unwrap().to_string()
     }
 
+    fn setup_conflict() -> TestRepo {
+        let t = init();
+        commit_file(&t.repo, "a.txt", "base\n");
+        let main = default_branch(&t.repo);
+        {
+            let head = t.repo.head().unwrap().peel_to_commit().unwrap();
+            t.repo.branch("feature", &head, false).unwrap();
+        }
+        t.repo.set_head("refs/heads/feature").unwrap();
+        commit_file(&t.repo, "a.txt", "theirs\n");
+        t.repo.set_head(&format!("refs/heads/{main}")).unwrap();
+        commit_file(&t.repo, "a.txt", "ours\n");
+
+        let path = t.path.to_string_lossy().to_string();
+        assert!(merge_branch("feature".into(), path).is_err());
+        t
+    }
+
     #[test]
     fn stages_deleted_file() {
         let t = init();
@@ -1679,5 +1887,69 @@ mod tests {
         assert!(snap.branches.iter().any(|b| b.is_head));
         assert_eq!(snap.user.name, "Test");
         assert!(snap.graph.nodes.iter().any(|n| n.is_head));
+    }
+
+    #[test]
+    fn reads_and_resolves_conflicts_and_commits_merge() {
+        let t = setup_conflict();
+        let path = t.path.to_string_lossy().to_string();
+
+        let repo = Repository::open(&t.path).unwrap();
+        assert!(matches!(repo.state(), git2::RepositoryState::Merge));
+        let info = get_repository_info(path.clone()).unwrap();
+        assert!(info.merging);
+
+        let conflict = get_conflict("a.txt".into(), path.clone()).unwrap();
+        assert_eq!(conflict.path, "a.txt");
+        assert!(!conflict.binary);
+        assert!(conflict.content.contains("<<<<<<<"));
+        assert_eq!(conflict.ours.as_deref(), Some("ours\n"));
+        assert_eq!(conflict.theirs.as_deref(), Some("theirs\n"));
+        assert_eq!(conflict.base.as_deref(), Some("base\n"));
+        assert!(conflict.has_ours && conflict.has_theirs && conflict.has_base);
+
+        resolve_conflict(
+            "a.txt".into(),
+            None,
+            Some("resolved\n".into()),
+            path.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(t.path.join("a.txt")).unwrap(),
+            "resolved\n"
+        );
+
+        let repo = Repository::open(&t.path).unwrap();
+        assert!(repo.index().unwrap().conflicts().unwrap().next().is_none());
+
+        let oid = commit("Merge feature".into(), None, None, path).unwrap();
+        let repo = Repository::open(&t.path).unwrap();
+        let merged = repo
+            .find_commit(git2::Oid::from_str(&oid).unwrap())
+            .unwrap();
+        assert_eq!(merged.parent_count(), 2);
+        assert!(!repo.path().join("MERGE_HEAD").exists());
+        assert!(!repo.path().join("MERGE_MSG").exists());
+        assert!(matches!(repo.state(), git2::RepositoryState::Clean));
+    }
+
+    #[test]
+    fn resolves_conflict_by_taking_a_side_and_can_abort() {
+        let t = setup_conflict();
+        let path = t.path.to_string_lossy().to_string();
+
+        resolve_conflict("a.txt".into(), Some("theirs".into()), None, path.clone()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(t.path.join("a.txt")).unwrap(),
+            "theirs\n"
+        );
+        abort_merge(path).unwrap();
+        let repo = Repository::open(&t.path).unwrap();
+        assert!(matches!(repo.state(), git2::RepositoryState::Clean));
+        assert_eq!(
+            std::fs::read_to_string(t.path.join("a.txt")).unwrap(),
+            "ours\n"
+        );
     }
 }

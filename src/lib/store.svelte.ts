@@ -4,6 +4,7 @@ import {
   type BranchGraph,
   type BranchInfo,
   type CommitInfo,
+  type ConflictFile,
   type FileStatus,
   type RemoteInfo,
   type RepoInfo,
@@ -172,6 +173,9 @@ export class RepoSession {
   diff = $state<DiffTarget | null>(null);
   selectedCommit = $state<CommitInfo | null>(null);
 
+  conflict = $state<ConflictFile | null>(null);
+  conflictLoading = $state(false);
+
   commitMessage = $state("");
 
   aiOpen = $state(false);
@@ -198,6 +202,10 @@ export class RepoSession {
 
   get unstaged(): FileStatus[] {
     return this.status.filter((f) => f.unstaged);
+  }
+
+  get conflicts(): FileStatus[] {
+    return this.status.filter((f) => f.index === "U" || f.worktree === "U");
   }
 
   get localBranches(): BranchInfo[] {
@@ -359,6 +367,55 @@ export class RepoSession {
         patch,
       };
     }
+  }
+
+  async openConflict(path: string) {
+    this.conflictLoading = true;
+    try {
+      this.conflict = await git.getConflict(this.path, path);
+    } catch (e) {
+      this.app.notify(typeof e === "string" ? e : String(e), "error");
+    } finally {
+      this.conflictLoading = false;
+    }
+  }
+
+  closeConflict() {
+    this.conflict = null;
+  }
+
+  async resolveConflict(
+    path: string,
+    side: "ours" | "theirs" | "base" | null,
+    content: string | null,
+  ) {
+    const ok = await this.runVoid(() =>
+      git.resolveConflict(this.path, path, side, content),
+    );
+    if (!ok) return false;
+
+    this.conflict = null;
+    await this.refreshAll();
+    const remaining = this.conflicts.length;
+    this.app.notify(
+      remaining === 0
+        ? "All conflicts resolved — commit to finish the merge"
+        : `Conflict resolved · ${remaining} remaining`,
+      "success",
+    );
+    return true;
+  }
+
+  async abortMerge() {
+    const ok = await this.runVoid(
+      () => git.abortMerge(this.path),
+      "Merge aborted",
+    );
+    if (ok) {
+      this.conflict = null;
+      await this.refreshAll();
+    }
+    return ok;
   }
 
   async loadCommit(commit: CommitInfo) {
@@ -571,9 +628,10 @@ export class RepoSession {
 
   async merge(name: string) {
     const res = await this.run(() => git.mergeBranch(this.path, name));
+    await this.refreshAll();
+    if (this.conflicts.length > 0) this.view = "changes";
     if (res !== null) {
       this.app.notify(res || `Merged ${name}`, "success");
-      await this.refreshAll();
     }
     return res !== null;
   }
@@ -610,8 +668,9 @@ export class RepoSession {
     if (res !== null) {
       markFetched(this.path);
       this.app.notify(res || "Pull complete", "success");
-      await this.refreshAll();
     }
+    await this.refreshAll();
+    if (this.conflicts.length > 0) this.view = "changes";
   }
 
   async push(remote: string | null, branch: string | null, setUpstream: boolean) {
@@ -792,6 +851,15 @@ class AppStore {
   get selectedCommit() {
     return this.active?.selectedCommit ?? null;
   }
+  get conflict() {
+    return this.active?.conflict ?? null;
+  }
+  get conflictLoading() {
+    return this.active?.conflictLoading ?? false;
+  }
+  get conflicts() {
+    return this.active?.conflicts ?? [];
+  }
   get commitMessage(): string {
     return this.active?.commitMessage ?? "";
   }
@@ -837,6 +905,22 @@ class AppStore {
   }
   loadWorkingDiff(path: string, staged: boolean) {
     return this.active?.loadWorkingDiff(path, staged);
+  }
+  openConflict(path: string) {
+    return this.active?.openConflict(path);
+  }
+  closeConflict() {
+    return this.active?.closeConflict();
+  }
+  resolveConflict(
+    path: string,
+    side: "ours" | "theirs" | "base" | null,
+    content: string | null,
+  ) {
+    return this.active?.resolveConflict(path, side, content);
+  }
+  abortMerge() {
+    return this.active?.abortMerge();
   }
   loadCommit(commit: CommitInfo) {
     return this.active?.loadCommit(commit);

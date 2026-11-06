@@ -35,6 +35,12 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       results, tools for repository info, branch/ref-aware commit history, branch
       comparison, branches, staged/unstaged diffs, and commit-message generation
       from the Changes view.
+- [x] Merge conflict resolution: conflicted files are listed separately in
+      Changes with a merge banner, a side-by-side ours/base/theirs resolver that
+      accepts a choice per conflict (or both), manual editing of the merged
+      result, whole-file side selection including delete/modify conflicts,
+      binary-conflict handling, abort merge, and merge commits that keep all
+      parents. No AI involvement.
 
 ## In progress
 
@@ -44,7 +50,6 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
 
 - [ ] Partial staging (per-hunk / per-line)
 - [ ] Amend commit / rebase / cherry-pick / reset
-- [ ] Merge conflict resolution UI
 - [ ] Blame view and file history
 - [ ] Commit signing (GPG/SSH)
 - [ ] Submodule support

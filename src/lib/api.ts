@@ -10,6 +10,7 @@ export interface RepoInfo {
   dirty: boolean;
   ahead: number;
   behind: number;
+  merging: boolean;
 }
 
 export interface FileStatus {
@@ -18,6 +19,18 @@ export interface FileStatus {
   worktree: string;
   staged: boolean;
   unstaged: boolean;
+}
+
+export interface ConflictFile {
+  path: string;
+  content: string;
+  binary: boolean;
+  ours: string | null;
+  theirs: string | null;
+  base: string | null;
+  hasOurs: boolean;
+  hasTheirs: boolean;
+  hasBase: boolean;
 }
 
 export interface CommitInfo {
@@ -113,6 +126,16 @@ export const git = {
     invoke<Snapshot>("get_snapshot", { repository, logLimit, includeRemote }),
 
   getStatus: (repository: string) => invoke<FileStatus[]>("get_status", { repository }),
+  getConflict: (repository: string, path: string) =>
+    invoke<ConflictFile>("get_conflict", { repository, path }),
+  resolveConflict: (
+    repository: string,
+    path: string,
+    side: "ours" | "theirs" | "base" | null,
+    content: string | null,
+  ) =>
+    invoke<void>("resolve_conflict", { repository, path, side, content }),
+  abortMerge: (repository: string) => invoke<void>("abort_merge", { repository }),
   stageFile: (repository: string, path: string) =>
     invoke<void>("stage_file", { repository, path }),
   unstageFile: (repository: string, path: string) =>
