@@ -8,6 +8,7 @@ import {
   type FileStatus,
   type RemoteInfo,
   type RepoInfo,
+  type Snapshot,
   type StashInfo,
   type TagInfo,
   type UserConfig,
@@ -56,12 +57,15 @@ export interface DiffTarget {
   title: string;
   subtitle: string;
   patch: string;
+  path?: string;
+  staged?: boolean;
 }
 
 let sessionCounter = 0;
 
 const LOG_PAGE = 300;
 const AUTO_FETCH_INTERVAL = 5 * 60 * 1000;
+const AUTO_REFRESH_INTERVAL = 30 * 1000;
 const LAST_FETCH_KEY = "gitweft.lastFetch";
 
 function lastFetchedAt(path: string): number {
@@ -189,6 +193,9 @@ export class RepoSession {
 
   busy = $state(false);
 
+  private autoRefreshing = false;
+  private autoRefreshFailed = false;
+
   constructor(app: AppStore, info: RepoInfo) {
     this.app = app;
     this.id = `s${++sessionCounter}`;
@@ -250,25 +257,37 @@ export class RepoSession {
     if (!this.repo) return;
     this.busy = true;
     try {
-      const s = await git.getSnapshot(
-        this.path,
-        LOG_PAGE,
-        this.graphIncludeRemote,
+      this.applySnapshot(
+        await git.getSnapshot(this.path, LOG_PAGE, this.graphIncludeRemote),
       );
-      this.status = s.status;
-      this.log = s.log;
-      this.logHasMore = s.log.length >= LOG_PAGE;
-      this.branches = s.branches;
-      this.graph = s.graph;
-      this.remotes = s.remotes;
-      this.tags = s.tags;
-      this.stashes = s.stashes;
-      this.user = s.user;
-      this.repo = s.repo;
     } catch (e) {
       this.app.notify(typeof e === "string" ? e : String(e), "error");
     } finally {
       this.busy = false;
+    }
+  }
+
+  private applySnapshot(s: Snapshot) {
+    this.status = s.status;
+    this.log = s.log;
+    this.logHasMore = s.log.length >= LOG_PAGE;
+    this.branches = s.branches;
+    this.graph = s.graph;
+    this.remotes = s.remotes;
+    this.tags = s.tags;
+    this.stashes = s.stashes;
+    this.user = s.user;
+    this.repo = s.repo;
+
+    if (this.diff?.path) {
+      const path = this.diff.path;
+      const staged = this.diff.staged;
+      const file = this.status.find((f) => f.path === path);
+      if (staged ? !file?.staged : !file?.unstaged) this.diff = null;
+    }
+    if (this.conflict) {
+      const path = this.conflict.path;
+      if (!this.conflicts.some((f) => f.path === path)) this.conflict = null;
     }
   }
 
@@ -288,6 +307,25 @@ export class RepoSession {
       // Background sync: ignore errors.
     } finally {
       this.app.progress = null;
+    }
+  }
+
+  async autoRefresh() {
+    if (!this.repo || this.busy || this.autoRefreshing) return;
+    if (this.app.progress !== null) return;
+    this.autoRefreshing = true;
+    try {
+      this.applySnapshot(
+        await git.getSnapshot(this.path, LOG_PAGE, this.graphIncludeRemote),
+      );
+      this.autoRefreshFailed = false;
+    } catch (e) {
+      if (!this.autoRefreshFailed) {
+        this.app.logError(typeof e === "string" ? e : String(e));
+        this.autoRefreshFailed = true;
+      }
+    } finally {
+      this.autoRefreshing = false;
     }
   }
 
@@ -365,6 +403,8 @@ export class RepoSession {
         title: path,
         subtitle: staged ? "Staged changes" : "Working tree changes",
         patch,
+        path,
+        staged,
       };
     }
   }
@@ -778,6 +818,10 @@ class AppStore {
             : (reason?.message ?? String(reason)),
         );
       });
+      window.setInterval(() => {
+        if (document.hidden) return;
+        for (const session of this.sessions) void session.autoRefresh();
+      }, AUTO_REFRESH_INTERVAL);
     }
   }
 

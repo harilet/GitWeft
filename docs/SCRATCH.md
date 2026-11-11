@@ -4,16 +4,20 @@ Append dated entries, keep the top current, prune what is obvious from code.
 
 ## Current focus
 
-Merge conflict resolution shipped: a dedicated conflict list and merge banner in
-Changes, a side-by-side ours/base/theirs resolver with per-conflict choices,
-manual editing, whole-file/delete handling, binary conflicts, abort merge, and
-merge-aware commits. The resolver now also has an optional AI recommendation:
-the model returns suggested file contents and the user must explicitly apply and
-save it. Next session should smoke-test the AI suggestion with a real conflict
-and a configured Ollama or OpenAI provider.
+Auto refresh shipped: every open session polls a full snapshot every 30 seconds
+from a single interval started in the `AppStore` constructor. Polls skip while
+the window is hidden, while a session is busy or network progress is showing,
+and while a previous poll is still in flight. `refreshAll` was refactored to
+share an `applySnapshot` helper with the poll, which also closes stale
+working-tree diffs and conflict resolvers after any refresh. Poll failures log
+to the error log once per outage instead of toasting every tick. Manual refresh
+(`Ctrl/Cmd + R`) is unchanged for an immediate update.
 
 ## Next up
 
+- Smoke-test auto refresh: commit externally, wait ≤30s and see status/history
+  update without refresh; confirm rapid alt-tabbing causes no refresh storms
+  and a deleted repo folder only logs once.
 - Manual smoke test with a real conflicting merge: resolve per conflict, save,
   commit the merge and verify both parents appear in history.
 - Exercise the AI recommendation with Ollama and OpenAI, and confirm that
@@ -23,6 +27,10 @@ and a configured Ollama or OpenAI provider.
 
 ## Known issues / watch-outs
 
+- Auto refresh polls every 30 seconds but pauses while the window is hidden
+  (`document.hidden`), so a freshly shown window can be up to one interval
+  stale; use refresh (`Ctrl/Cmd + R`) for an immediate update. Poll failures
+  (e.g. the repo folder was deleted) log to the error log only once per outage.
 - The conflict resolver handles merge/pull conflicts (`RepositoryState::Merge`);
   rebase and cherry-pick conflicts are not covered yet.
 - Conflict blocks are parsed from the working-tree markers. Merge, diff3 and
@@ -63,6 +71,20 @@ and a configured Ollama or OpenAI provider.
 
 ## Decisions
 
+- 2026-11-11 — Auto refresh is a fixed 30-second poll, not a window-focus
+  trigger or a filesystem watcher, with no settings toggle. Why: the user
+  picked a simple cadence and the refresh button already covers "sooner";
+  a Rust `notify`-based watcher remains a future idea.
+- 2026-11-11 — The poll refreshes every open session, not just the active one.
+  Why: sessions are tabs in one window, snapshots are cheap and stateless, and
+  it keeps background tabs and nav-rail counts fresh.
+- 2026-11-11 — Poll failures are silent except for one error-log entry per
+  outage. Why: a repo unreachable offline or deleted externally must not toast
+  every 30 seconds.
+- 2026-11-11 — `applySnapshot` closes a working-tree diff whose file no longer
+  has that staged/unstaged state, and a conflict resolver whose file is no
+  longer conflicted. Why: a stale diff or resolver is misleading; commit diffs
+  are immutable and never pruned.
 - 2026-11-06 — AI conflict advice is recommendation-only: it uses a plain chat
   request with no tools, returns file contents, and never writes or stages. The
   user must apply the suggestion to the editor and then explicitly save. Why:
@@ -97,6 +119,25 @@ and a configured Ollama or OpenAI provider.
 
 ## Session log
 
+### 2026-11-11 — Auto refresh (30-second poll)
+
+- Added `RepoSession.autoRefresh`: fetches the snapshot without setting `busy`,
+  skips while the session is busy, network progress is showing or a poll is
+  already in flight, and logs failures to the error log once per consecutive
+  outage (never toasts).
+- Refactored `refreshAll` and the poll to share `applySnapshot`, which assigns
+  the snapshot fields and then prunes stale UI state: working-tree diffs whose
+  file lost the staged/unstaged state close, and an open conflict resolver
+  closes when its file is no longer conflicted.
+- `DiffTarget` gained optional `path`/`staged` (set by `loadWorkingDiff`) so
+  pruning can identify working-tree diffs; commit diffs carry no path and are
+  never pruned.
+- `AppStore` starts one 30-second interval (browser guard, like the existing
+  error listeners) that skips ticks while `document.hidden` and calls
+  `autoRefresh` on every open session.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK. No Rust
+  changes, so `cargo` checks were not re-run.
+
 ### 2026-11-06 — AI conflict recommendations
 
 - Added `suggestConflictResolution` in `src/lib/ai.ts`: a plain, tool-free chat
@@ -108,6 +149,8 @@ and a configured Ollama or OpenAI provider.
   Regenerate / Dismiss, a read-only preview, and Apply to editor. Applying only
   fills the manual editor; `Save & mark resolved` remains the sole write.
 - The model receives no tools and cannot stage, commit or modify anything.
+- Each conflict block now shows its own Result preview; the full merged file is
+  hidden behind Preview / Edit manually so the resolver stays focused.
 - Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK.
 
 ### 2026-11-06 — Merge conflict resolver

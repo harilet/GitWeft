@@ -26,6 +26,10 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
 - [x] Shortcuts: `Ctrl/Cmd + R` refresh, `Ctrl/Cmd + ,` settings, `Esc` close dialog.
 - [x] Persistent error log: toast errors and uncaught runtime errors are saved on
       device (max 200), viewable in Settings → Error log with copy-all and clear.
+- [x] Auto refresh: every open session re-polls its snapshot every 30 seconds
+      while the window is visible (manual refresh stays available for sooner);
+      stale working-tree diffs and conflict resolvers close automatically and
+      poll failures are logged to the error log once per outage, never toasted.
 
 - [x] Nav rail Branches count shows local/remote totals and the app version is
       `0.1.2` (`src-tauri/tauri.conf.json`).

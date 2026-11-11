@@ -6,6 +6,7 @@
     buildResolved,
     defaultChoices,
     parseConflicts,
+    type ConflictBlock,
     type ConflictChoice,
   } from "../conflicts";
   import {
@@ -21,6 +22,7 @@
   let choices = $state<Record<number, ConflictChoice>>({});
   let manual = $state(false);
   let manualText = $state("");
+  let showFullFile = $state(false);
   let saving = $state(false);
   let initializedFor = $state<string | null>(null);
 
@@ -40,7 +42,9 @@
     if (!file || initializedFor === file.path) return;
     initializedFor = file.path;
     choices = defaultChoices(parsed.blocks);
-    manual = !file.binary && parsed.blocks.length === 0;
+    const needsManual = !file.binary && parsed.blocks.length === 0;
+    manual = needsManual;
+    showFullFile = needsManual;
     manualText = file.content;
   });
 
@@ -48,10 +52,31 @@
     choices = { ...choices, [id]: choice };
   }
 
-  function toggleManual() {
+  function choiceLabel(block: ConflictBlock): string {
+    const choice = choices[block.id] ?? "ours";
+    if (choice === "both") return "Both";
+    if (choice === "theirs") return "Theirs";
+    if (choice === "base") return "Base";
+    return "Ours";
+  }
+
+  function blockResult(block: ConflictBlock): string[] {
+    const choice = choices[block.id] ?? "ours";
+    if (choice === "theirs") return block.theirsLines;
+    if (choice === "base") return block.baseLines ?? [];
+    if (choice === "both") {
+      return [...block.oursLines, ...block.theirsLines];
+    }
+    return block.oursLines;
+  }
+
+  async function toggleManual() {
     if (!manual) {
       manualText = resolved;
       manual = true;
+      showFullFile = true;
+      await tick();
+      resultEditor?.focus();
     } else {
       manual = false;
     }
@@ -92,6 +117,7 @@
     if (aiSuggestion === null) return;
     manualText = aiSuggestion;
     manual = true;
+    showFullFile = true;
     await tick();
     resultEditor?.scrollIntoView({ block: "center", behavior: "smooth" });
     resultEditor?.focus();
@@ -320,6 +346,14 @@
                   <pre>{block.theirsLines.join("\n") || " "}</pre>
                 </div>
               </div>
+
+              <div class="block-result">
+                <div class="block-result-head">
+                  <span class="label">Result</span>
+                  <span class="badge blue">{choiceLabel(block)}</span>
+                </div>
+                <pre>{blockResult(block).join("\n") || " "}</pre>
+              </div>
             </article>
           {/each}
 
@@ -394,24 +428,35 @@
 
           <section class="result">
             <div class="result-head">
-              <span class="label"
-                >Merged result &middot; {manual
-                  ? "manual edit"
-                  : "built from choices"}</span
-              >
-              <button class="btn ghost sm" onclick={toggleManual}>
-                {manual ? "Use choices" : "Edit manually"}
-              </button>
+              <div class="result-titles">
+                <span class="label">Full merged file</span>
+                <span class="result-meta"
+                  >{manual ? "manual edit" : "built from choices"}</span
+                >
+              </div>
+              <div class="row">
+                <button
+                  class="btn ghost sm"
+                  onclick={() => (showFullFile = !showFullFile)}
+                >
+                  {showFullFile ? "Hide" : "Preview"}
+                </button>
+                <button class="btn ghost sm" onclick={toggleManual}>
+                  {manual ? "Use choices" : "Edit manually"}
+                </button>
+              </div>
             </div>
-            {#if manual}
-              <textarea
-                class="textarea result-editor"
-                spellcheck="false"
-                bind:this={resultEditor}
-                bind:value={manualText}
-              ></textarea>
-            {:else}
-              <pre class="result-preview main-scrollbar">{resolved}</pre>
+            {#if showFullFile}
+              {#if manual}
+                <textarea
+                  class="textarea result-editor"
+                  spellcheck="false"
+                  bind:this={resultEditor}
+                  bind:value={manualText}
+                ></textarea>
+              {:else}
+                <pre class="result-preview main-scrollbar">{resolved}</pre>
+              {/if}
             {/if}
           </section>
         {/if}
@@ -595,6 +640,34 @@
     background: rgba(209, 176, 107, 0.08);
   }
 
+  .block-result {
+    border-top: 1px solid var(--border-color);
+    background: rgba(116, 201, 145, 0.06);
+  }
+  .block-result-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .block-result-head .label {
+    color: var(--green);
+  }
+  .block-result pre {
+    margin: 0;
+    padding: 10px 12px;
+    min-height: 34px;
+    max-height: 240px;
+    overflow: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
   .ai-box {
     border: 1px solid var(--border-color);
     background: var(--surface-2);
@@ -674,6 +747,16 @@
     padding: 8px 12px;
     background: var(--surface-2);
     border-bottom: 1px solid var(--border-color);
+  }
+  .result-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .result-meta {
+    font-size: 10px;
+    color: var(--muted-color);
   }
   .result-preview {
     margin: 0;
