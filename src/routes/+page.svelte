@@ -27,7 +27,8 @@
   const cannotPush = $derived(!app.repo || app.repo.detached || app.repo.unborn);
 
   const nav: { key: ViewKey; label: string; count: () => string }[] = [
-    { key: "changes", label: "Changes", count: () => app.status.length.toString() },
+    { key: "changes", label: "Changes test 2 returns", count: () => app.status.length.toString() },
+    
     { key: "history", label: "History", count: () => app.log.length.toString() },
     { key: "branches", label: "Branches", count: () => {
       const localBranches = app.branches.filter((b) => !b.isRemote);
