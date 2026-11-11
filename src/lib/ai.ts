@@ -10,6 +10,7 @@ export interface AiConfig {
   model: string;
   apiKey: string;
   temperature: number;
+  disabled: boolean;
 }
 
 export interface AiSettings {
@@ -53,6 +54,7 @@ export const AI_DEFAULTS: Record<AiProvider, AiConfig> = {
     model: "llama3.2",
     apiKey: "",
     temperature: 0.2,
+    disabled: false,
   },
   openai: {
     provider: "openai",
@@ -60,6 +62,7 @@ export const AI_DEFAULTS: Record<AiProvider, AiConfig> = {
     model: "gpt-4o-mini",
     apiKey: "",
     temperature: 0.2,
+    disabled: false,
   },
 };
 
@@ -97,6 +100,7 @@ function sanitizeConfig(value: unknown, fallback: AiConfig): AiConfig {
         : defaults.model,
     apiKey: typeof raw.apiKey === "string" ? raw.apiKey : "",
     temperature: clampTemperature(raw.temperature),
+    disabled: raw.disabled === true,
   };
 }
 

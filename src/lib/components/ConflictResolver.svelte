@@ -87,6 +87,7 @@
     if (!file || aiSuggesting) return;
 
     const config = app.aiConfig;
+    if (config.disabled) return;
     if (!isAiConfigured(config)) {
       app.notify("Configure an AI provider in Settings → AI", "error");
       app.openAiSettings();
@@ -357,74 +358,76 @@
             </article>
           {/each}
 
-          <section class="ai-box">
-            <div class="ai-head">
-              <div class="ai-titles">
-                <span class="label">AI recommendation</span>
-                {#if app.aiConfigured}
-                  <span class="ai-model"
-                    >{providerLabel(app.aiConfig.provider)} ·
-                    {app.aiConfig.model}</span
-                  >
-                {/if}
-              </div>
-              <div class="row">
-                {#if aiSuggestion !== null}
+          {#if !app.aiDisabled}
+            <section class="ai-box">
+              <div class="ai-head">
+                <div class="ai-titles">
+                  <span class="label">AI recommendation</span>
+                  {#if app.aiConfigured}
+                    <span class="ai-model"
+                      >{providerLabel(app.aiConfig.provider)} ·
+                      {app.aiConfig.model}</span
+                    >
+                  {/if}
+                </div>
+                <div class="row">
+                  {#if aiSuggestion !== null}
+                    <button
+                      class="btn ghost sm"
+                      disabled={aiSuggesting}
+                      onclick={() => {
+                        aiSuggestion = null;
+                        aiError = null;
+                      }}>Dismiss</button
+                    >
+                  {/if}
                   <button
                     class="btn ghost sm"
                     disabled={aiSuggesting}
-                    onclick={() => {
-                      aiSuggestion = null;
-                      aiError = null;
-                    }}>Dismiss</button
+                    onclick={suggestWithAi}
                   >
-                {/if}
-                <button
-                  class="btn ghost sm"
-                  disabled={aiSuggesting}
-                  onclick={suggestWithAi}
-                >
-                  {aiSuggesting
-                    ? "Asking the model…"
-                    : aiSuggestion !== null
-                      ? "Regenerate"
-                      : "Suggest with AI"}
-                </button>
-              </div>
-            </div>
-
-            {#if aiError}
-              <div class="ai-error">{aiError}</div>
-            {:else if aiSuggesting}
-              <p class="ai-hint">
-                Waiting for the model. Nothing is changed until you accept the
-                suggestion and save.
-              </p>
-            {:else if aiSuggestion !== null}
-              {#if aiSuggestionHasMarkers}
-                <div class="note">
-                  The suggestion still contains conflict markers. Review it
-                  carefully before using it.
+                    {aiSuggesting
+                      ? "Asking the model…"
+                      : aiSuggestion !== null
+                        ? "Regenerate"
+                        : "Suggest with AI"}
+                  </button>
                 </div>
-              {/if}
-              <pre class="ai-preview main-scrollbar">{aiSuggestion}</pre>
-              <div class="ai-actions">
-                <button class="btn sm" onclick={applySuggestion}
-                  >Apply to editor</button
-                >
-                <span class="ai-note">
-                  The AI only recommends. Apply it, edit it if needed, then press
-                  Save &amp; mark resolved.
-                </span>
               </div>
-            {:else}
-              <p class="ai-hint">
-                Ask the configured provider to recommend a merged file. The
-                assistant cannot write, stage or commit; you review the
-                suggestion and decide whether to use it.
-              </p>
-            {/if}
-          </section>
+
+              {#if aiError}
+                <div class="ai-error">{aiError}</div>
+              {:else if aiSuggesting}
+                <p class="ai-hint">
+                  Waiting for the model. Nothing is changed until you accept the
+                  suggestion and save.
+                </p>
+              {:else if aiSuggestion !== null}
+                {#if aiSuggestionHasMarkers}
+                  <div class="note">
+                    The suggestion still contains conflict markers. Review it
+                    carefully before using it.
+                  </div>
+                {/if}
+                <pre class="ai-preview main-scrollbar">{aiSuggestion}</pre>
+                <div class="ai-actions">
+                  <button class="btn sm" onclick={applySuggestion}
+                    >Apply to editor</button
+                  >
+                  <span class="ai-note">
+                    The AI only recommends. Apply it, edit it if needed, then press
+                    Save &amp; mark resolved.
+                  </span>
+                </div>
+              {:else}
+                <p class="ai-hint">
+                  Ask the configured provider to recommend a merged file. The
+                  assistant cannot write, stage or commit; you review the
+                  suggestion and decide whether to use it.
+                </p>
+              {/if}
+            </section>
+          {/if}
 
           <section class="result">
             <div class="result-head">

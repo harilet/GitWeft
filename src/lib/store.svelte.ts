@@ -473,6 +473,7 @@ export class RepoSession {
   }
 
   openAi(mode: AiMode = "chat") {
+    if (resolveAiConfig(this.app.aiSettings, this.path).disabled) return;
     if (mode === "commit" && !this.aiRunning) {
       this.aiEntries = [];
       this.aiHistory = [];
@@ -504,6 +505,10 @@ export class RepoSession {
     if (!prompt || this.aiRunning) return;
 
     const config = this.app.aiConfig;
+    if (config.disabled) {
+      this.app.notify("The AI assistant is disabled for this repository", "error");
+      return;
+    }
     if (!isAiConfigured(config)) {
       this.app.notify("Configure an AI provider in Settings → AI", "error");
       this.app.openAiSettings();
@@ -937,6 +942,9 @@ class AppStore {
   get aiConfigured(): boolean {
     return isAiConfigured(this.aiConfig);
   }
+  get aiDisabled(): boolean {
+    return this.aiConfig.disabled;
+  }
 
   refreshAll() {
     return this.active?.refreshAll();
@@ -1161,6 +1169,7 @@ class AppStore {
     }
     this.aiSettings = next;
     persistAiSettings(next);
+    this.syncAiPanels(next);
   }
 
   clearRepoAiConfig(path: string) {
@@ -1169,6 +1178,15 @@ class AppStore {
     const next: AiSettings = { app: this.aiSettings.app, repos };
     this.aiSettings = next;
     persistAiSettings(next);
+    this.syncAiPanels(next);
+  }
+
+  private syncAiPanels(settings: AiSettings) {
+    for (const session of this.sessions) {
+      if (session.aiOpen && resolveAiConfig(settings, session.path).disabled) {
+        session.closeAi();
+      }
+    }
   }
 
   private touchRecent(path: string, name: string) {

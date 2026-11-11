@@ -4,14 +4,13 @@ Append dated entries, keep the top current, prune what is obvious from code.
 
 ## Current focus
 
-Auto refresh shipped: every open session polls a full snapshot every 30 seconds
-from a single interval started in the `AppStore` constructor. Polls skip while
-the window is hidden, while a session is busy or network progress is showing,
-and while a previous poll is still in flight. `refreshAll` was refactored to
-share an `applySnapshot` helper with the poll, which also closes stale
-working-tree diffs and conflict resolvers after any refresh. Poll failures log
-to the error log once per outage instead of toasting every tick. Manual refresh
-(`Ctrl/Cmd + R`) is unchanged for an immediate update.
+AI can now be turned off per scope: a `disabled` flag on `AiConfig` works in
+app defaults and in per-repository overrides (Settings → AI, "Disable the AI
+assistant"). While the resolved config is disabled, every AI affordance is
+hidden — the toolbar AI button, the Changes "AI generate" button and the
+conflict resolver's AI recommendation panel. Settings stays reachable so it
+can be re-enabled, and saving/clearing AI settings closes an open AI drawer
+whose session just became disabled.
 
 ## Next up
 
@@ -22,6 +21,9 @@ to the error log once per outage instead of toasting every tick. Manual refresh
   commit the merge and verify both parents appear in history.
 - Exercise the AI recommendation with Ollama and OpenAI, and confirm that
   dismissing or closing it never changes the repository.
+- Smoke-test the AI disable toggle: disable at repo scope and confirm the
+  toolbar button, "AI generate" and the conflict AI panel disappear; disable at
+  app scope and confirm repos with an enabled override keep their buttons.
 - Also exercise delete/modify and binary conflicts, plus Abort merge.
 - Pick the next feature from `docs/FEATURES.md` Ideas.
 
@@ -71,6 +73,12 @@ to the error log once per outage instead of toasting every tick. Manual refresh
 
 ## Decisions
 
+- 2026-11-11 — The AI off switch is a `disabled` flag inside `AiConfig`
+  (app defaults and per-repo override), not a separate list of disabled paths.
+  Why: it reuses the existing override model and `resolveAiConfig`, gives an
+  app-wide off default for free, and keeps one source of truth. UI affordances
+  are hidden when the resolved config is disabled; Settings stays reachable so
+  it can be turned back on.
 - 2026-11-11 — Auto refresh is a fixed 30-second poll, not a window-focus
   trigger or a filesystem watcher, with no settings toggle. Why: the user
   picked a simple cadence and the refresh button already covers "sooner";
@@ -118,6 +126,22 @@ to the error log once per outage instead of toasting every tick. Manual refresh
   requested doc flow while giving agents one current source.
 
 ## Session log
+
+### 2026-11-11 — Per-repo AI off switch
+
+- `AiConfig` gained a `disabled` flag (sanitized on load, default `false`), so
+  app defaults and each repository override can turn the assistant off;
+  existing stored settings load unchanged.
+- Settings → AI shows a "Disable the AI assistant" checkbox in both scopes; the
+  provider fields gray out while disabled, and the repo no-override notice
+  explains when app defaults disable AI.
+- While the resolved config is disabled, the toolbar AI button, the Changes
+  "AI generate" button and the conflict resolver's AI recommendation panel are
+  hidden; `openAi` refuses to open and `sendAi` toasts instead of calling a
+  provider. Saving or clearing AI settings closes any open AI drawer whose
+  session just became disabled (`syncAiPanels`).
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK. No Rust
+  changes, so `cargo` checks were not re-run.
 
 ### 2026-11-11 — Auto refresh (30-second poll)
 

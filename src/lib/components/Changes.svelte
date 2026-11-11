@@ -136,11 +136,13 @@
   <section class="commit-box">
     <div class="commit-head">
       <span class="label commit-label">Commit message</span>
-      <button
-        class="btn ghost sm"
-        title="Generate a commit message with AI"
-        onclick={() => app.openAi("commit")}>AI generate</button
-      >
+      {#if !app.aiDisabled}
+        <button
+          class="btn ghost sm"
+          title="Generate a commit message with AI"
+          onclick={() => app.openAi("commit")}>AI generate</button
+        >
+      {/if}
     </div>
     <textarea
       class="textarea"

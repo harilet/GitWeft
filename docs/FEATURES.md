@@ -39,6 +39,10 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       results, tools for repository info, branch/ref-aware commit history, branch
       comparison, branches, staged/unstaged diffs, and commit-message generation
       from the Changes view.
+- [x] AI can be turned off per scope: Settings → AI has a "Disable the AI
+      assistant" checkbox for app defaults or a single repository override; while
+      disabled, the toolbar AI button, the Changes "AI generate" button and the
+      conflict resolver's AI recommendation panel are hidden.
 - [x] Merge conflict resolution: conflicted files are listed separately in
       Changes with a merge banner, a side-by-side ours/base/theirs resolver that
       accepts a choice per conflict (or both), manual editing of the merged

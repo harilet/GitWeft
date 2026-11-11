@@ -405,17 +405,39 @@
               </label>
               {#if !override}
                 <div class="notice">
-                  <span class="label">Using app defaults</span>
-                  <p class="desc">
-                    This repository uses {providerLabel(appAi.provider)} ·
-                    {appAi.model}. Enable the override above to choose a
-                    different provider, model or key here.
-                  </p>
+                  <span class="label">{appAi.disabled ? "AI disabled" : "Using app defaults"}</span>
+                  {#if appAi.disabled}
+                    <p class="desc">
+                      The AI assistant is turned off by the app defaults. Enable
+                      the override above and clear the disable option to use it
+                      here.
+                    </p>
+                  {:else}
+                    <p class="desc">
+                      This repository uses {providerLabel(appAi.provider)} ·
+                      {appAi.model}. Enable the override above to choose a
+                      different provider, model or key here.
+                    </p>
+                  {/if}
                 </div>
               {/if}
             {/if}
 
-            <fieldset class="ai-fields" disabled={aiScope === "repo" && !override}>
+            {#if aiScope === "app" || override}
+              <label class="row scope">
+                <input type="checkbox" bind:checked={aiForm.disabled} />
+                <span>
+                  {aiScope === "app"
+                    ? "Disable the AI assistant (applies to repositories without an override)"
+                    : `Disable the AI assistant for ${app.repo?.name}`}
+                </span>
+              </label>
+            {/if}
+
+            <fieldset
+              class="ai-fields"
+              disabled={(aiScope === "repo" && !override) || aiForm.disabled}
+            >
               <label class="field">
                 <span>Provider</span>
                 <select

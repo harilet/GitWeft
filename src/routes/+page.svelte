@@ -102,11 +102,13 @@
               onclick={() => app.refreshAll()}
               title="Refresh (Ctrl+R)">Refresh</button
             >
-            <button
-              class="btn sm"
-              title="Repository AI assistant"
-              onclick={() => app.openAi("chat")}>AI</button
-            >
+            {#if !app.aiDisabled}
+              <button
+                class="btn sm"
+                title="Repository AI assistant"
+                onclick={() => app.openAi("chat")}>AI</button
+              >
+            {/if}
             <button
               class="btn sm"
               title="Settings (Ctrl+,)"
