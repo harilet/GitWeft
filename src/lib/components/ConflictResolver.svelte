@@ -15,6 +15,14 @@
     providerLabel,
     suggestConflictResolution,
   } from "../ai";
+  import ConflictLines from "./ConflictLines.svelte";
+
+  interface SearchMatch {
+    pane: string;
+    line: number;
+  }
+
+  const EDITOR_LINE_HEIGHT = 18.6;
 
   const conflict = $derived(app.conflict);
   const parsed = $derived(parseConflicts(conflict?.content ?? ""));
@@ -24,12 +32,19 @@
   let manualText = $state("");
   let showFullFile = $state(false);
   let saving = $state(false);
-  let initializedFor = $state<string | null>(null);
+  let initializedFor = $state<{ path: string; content: string } | null>(null);
 
   let aiSuggesting = $state(false);
   let aiSuggestion = $state<string | null>(null);
   let aiError = $state<string | null>(null);
   let resultEditor = $state<HTMLTextAreaElement | null>(null);
+
+  let query = $state("");
+  let caseSensitive = $state(false);
+  let matchIndex = $state(0);
+  let searchInput = $state<HTMLInputElement | null>(null);
+  let rootEl = $state<HTMLDivElement | null>(null);
+  let gutterEl = $state<HTMLDivElement | null>(null);
 
   const aiSuggestionHasMarkers = $derived(
     aiSuggestion !== null && hasConflictMarkers(aiSuggestion),
@@ -37,15 +52,71 @@
 
   const resolved = $derived(buildResolved(parsed.segments, choices));
 
+  const queryText = $derived(query.trim());
+  const manualLines = $derived(manualText.split("\n"));
+
+  const matches = $derived.by(() => {
+    const q = queryText;
+    if (!q) return [] as SearchMatch[];
+    const target = caseSensitive ? q : q.toLowerCase();
+    const test = (line: string) =>
+      (caseSensitive ? line : line.toLowerCase()).includes(target);
+    const out: SearchMatch[] = [];
+    for (const block of parsed.blocks) {
+      const sides: [string, string[] | null][] = [
+        ["ours", block.oursLines],
+        ["base", block.baseLines],
+        ["theirs", block.theirsLines],
+      ];
+      for (const [side, lines] of sides) {
+        if (!lines) continue;
+        for (let i = 0; i < lines.length; i++) {
+          if (test(lines[i])) out.push({ pane: `b${block.id}-${side}`, line: i });
+        }
+      }
+    }
+    const full = (manual ? manualText : resolved).split("\n");
+    for (let i = 0; i < full.length; i++) {
+      if (test(full[i])) out.push({ pane: "full", line: i });
+    }
+    return out;
+  });
+
+  const activeMatch = $derived(
+    matches.length > 0 && matchIndex < matches.length
+      ? matches[matchIndex]
+      : null,
+  );
+  const activePane = $derived(activeMatch?.pane ?? null);
+  const activeLine = $derived(activeMatch?.line ?? null);
+  const matchCountLabel = $derived(
+    queryText
+      ? matches.length > 0
+        ? `${Math.min(matchIndex + 1, matches.length)}/${matches.length}`
+        : "0"
+      : "",
+  );
+
   $effect(() => {
     const file = conflict;
-    if (!file || initializedFor === file.path) return;
-    initializedFor = file.path;
+    if (!file) {
+      query = "";
+      matchIndex = 0;
+      return;
+    }
+    if (
+      initializedFor?.path === file.path &&
+      initializedFor.content === file.content
+    )
+      return;
+    initializedFor = { path: file.path, content: file.content };
     choices = defaultChoices(parsed.blocks);
     const needsManual = !file.binary && parsed.blocks.length === 0;
     manual = needsManual;
     showFullFile = needsManual;
     manualText = file.content;
+    query = "";
+    matchIndex = 0;
   });
 
   function setChoice(id: number, choice: ConflictChoice) {
@@ -162,7 +233,82 @@
       app.abortMerge();
   }
 
+  function paneLabel(pane: string): string {
+    if (pane === "full") return "whole file";
+    const [block, side] = pane.split("-");
+    return `conflict ${Number(block.slice(1)) + 1} · ${side}`;
+  }
+
+  function scrollToLine(pane: string, line: number) {
+    rootEl
+      ?.querySelector(`[data-pane="${pane}"][data-line="${line}"]`)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  function focusManualMatch(m: SearchMatch) {
+    const el = resultEditor;
+    if (!el) return;
+    const lines = manualText.split("\n");
+    let start = 0;
+    for (let k = 0; k < m.line; k++) start += lines[k].length + 1;
+    const line = lines[m.line] ?? "";
+    const target = caseSensitive ? queryText : queryText.toLowerCase();
+    const hay = caseSensitive ? line : line.toLowerCase();
+    const rel = hay.indexOf(target);
+    if (rel >= 0) el.setSelectionRange(start + rel, start + rel + target.length);
+    el.focus({ preventScroll: true });
+    el.scrollTop = Math.max(
+      0,
+      m.line * EDITOR_LINE_HEIGHT - el.clientHeight / 2,
+    );
+  }
+
+  async function gotoMatch(delta: number) {
+    if (matches.length === 0) return;
+    matchIndex =
+      ((matchIndex + delta) % matches.length + matches.length) % matches.length;
+    const m = matches[matchIndex];
+    if (m.pane === "full" && !showFullFile) {
+      showFullFile = true;
+      await tick();
+    }
+    if (m.pane === "full" && manual) focusManualMatch(m);
+    else scrollToLine(m.pane, m.line);
+  }
+
+  function toggleCase() {
+    caseSensitive = !caseSensitive;
+    matchIndex = 0;
+  }
+
+  function syncGutter() {
+    if (gutterEl && resultEditor) gutterEl.scrollTop = resultEditor.scrollTop;
+  }
+
+  function searchKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      gotoMatch(e.shiftKey ? -1 : 1);
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      if (query) {
+        query = "";
+        matchIndex = 0;
+      } else {
+        searchInput?.blur();
+      }
+    }
+  }
+
   function onkey(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
+      if (conflict && !conflict.binary) {
+        e.preventDefault();
+        searchInput?.focus();
+        searchInput?.select();
+      }
+      return;
+    }
     if (e.key === "Escape" && !saving) app.closeConflict();
   }
 </script>
@@ -182,6 +328,7 @@
       role="dialog"
       aria-modal="true"
       tabindex="-1"
+      bind:this={rootEl}
       onclick={(e) => e.stopPropagation()}
     >
       <header class="modal-head">
@@ -264,6 +411,42 @@
             {/if}
           </div>
 
+          <div class="search-bar">
+            <input
+              class="input search-input"
+              type="text"
+              placeholder="Search file… (Ctrl+F)"
+              spellcheck="false"
+              title="Search across conflict sides and the whole file"
+              bind:this={searchInput}
+              bind:value={query}
+              oninput={() => (matchIndex = 0)}
+              onkeydown={searchKeydown}
+            />
+            <span class="search-count">{matchCountLabel}</span>
+            <button
+              class="btn ghost sm"
+              title="Previous match (Shift+Enter)"
+              disabled={matches.length === 0}
+              onclick={() => gotoMatch(-1)}>↑</button
+            >
+            <button
+              class="btn ghost sm"
+              title="Next match (Enter)"
+              disabled={matches.length === 0}
+              onclick={() => gotoMatch(1)}>↓</button
+            >
+            <button
+              class="btn ghost sm search-case"
+              class:active={caseSensitive}
+              title="Match case"
+              onclick={toggleCase}>Aa</button
+            >
+            {#if activeMatch}
+              <span class="search-hint">{paneLabel(activeMatch.pane)}</span>
+            {/if}
+          </div>
+
           {#if parsed.blocks.length === 0}
             <div class="note">
               No conflict markers were found in the working file. Edit it
@@ -319,7 +502,15 @@
                     <span class="label">Ours</span>
                     <span class="side-label">{block.oursLabel}</span>
                   </div>
-                  <pre>{block.oursLines.join("\n") || " "}</pre>
+                  <ConflictLines
+                    lines={block.oursLines}
+                    startNo={block.oursStart}
+                    paneKey={"b" + block.id + "-ours"}
+                    {query}
+                    {caseSensitive}
+                    {activePane}
+                    {activeLine}
+                  />
                 </div>
 
                 {#if block.baseLines !== null}
@@ -331,7 +522,15 @@
                       <span class="label">Base</span>
                       <span class="side-label">{block.baseLabel}</span>
                     </div>
-                    <pre>{block.baseLines.join("\n") || " "}</pre>
+                    <ConflictLines
+                      lines={block.baseLines}
+                      startNo={block.baseStart}
+                      paneKey={"b" + block.id + "-base"}
+                      {query}
+                      {caseSensitive}
+                      {activePane}
+                      {activeLine}
+                    />
                   </div>
                 {/if}
 
@@ -344,7 +543,15 @@
                     <span class="label">Theirs</span>
                     <span class="side-label">{block.theirsLabel}</span>
                   </div>
-                  <pre>{block.theirsLines.join("\n") || " "}</pre>
+                  <ConflictLines
+                    lines={block.theirsLines}
+                    startNo={block.theirsStart}
+                    paneKey={"b" + block.id + "-theirs"}
+                    {query}
+                    {caseSensitive}
+                    {activePane}
+                    {activeLine}
+                  />
                 </div>
               </div>
 
@@ -353,7 +560,15 @@
                   <span class="label">Result</span>
                   <span class="badge blue">{choiceLabel(block)}</span>
                 </div>
-                <pre>{blockResult(block).join("\n") || " "}</pre>
+                <ConflictLines
+                  lines={blockResult(block)}
+                  startNo={block.startLine}
+                  paneKey={"b" + block.id + "-result"}
+                  {query}
+                  {caseSensitive}
+                  {activePane}
+                  {activeLine}
+                />
               </div>
             </article>
           {/each}
@@ -451,14 +666,30 @@
             </div>
             {#if showFullFile}
               {#if manual}
-                <textarea
-                  class="textarea result-editor"
-                  spellcheck="false"
-                  bind:this={resultEditor}
-                  bind:value={manualText}
-                ></textarea>
+                <div class="editor-wrap">
+                  <div class="gutter" bind:this={gutterEl} aria-hidden="true">
+                    {#each manualLines as _, i (i)}<span>{i + 1}</span>{/each}
+                  </div>
+                  <textarea
+                    class="textarea result-editor"
+                    spellcheck="false"
+                    bind:this={resultEditor}
+                    bind:value={manualText}
+                    onscroll={syncGutter}
+                  ></textarea>
+                </div>
               {:else}
-                <pre class="result-preview main-scrollbar">{resolved}</pre>
+                <ConflictLines
+                  class="result-preview"
+                  style="max-height: 420px"
+                  lines={resolved.split("\n")}
+                  startNo={1}
+                  paneKey="full"
+                  {query}
+                  {caseSensitive}
+                  {activePane}
+                  {activeLine}
+                />
               {/if}
             {/if}
           </section>
@@ -552,6 +783,37 @@
     flex-wrap: wrap;
     padding: 0 0 14px;
   }
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 0 0 14px;
+  }
+  .search-input {
+    width: 240px;
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .search-count {
+    min-width: 42px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted-color);
+  }
+  .search-case.active {
+    color: var(--text-color);
+    border-color: var(--border-strong);
+    background: var(--hover-color);
+  }
+  .search-hint {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted-color);
+    white-space: nowrap;
+  }
   .note {
     padding: 10px 12px;
     margin-bottom: 14px;
@@ -609,18 +871,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .side pre {
-    margin: 0;
-    padding: 10px 12px;
-    min-height: 44px;
-    max-height: 240px;
-    overflow: auto;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
   .side.ours {
     box-shadow: inset 3px 0 0 var(--primary-color);
   }
@@ -657,18 +907,6 @@
   }
   .block-result-head .label {
     color: var(--green);
-  }
-  .block-result pre {
-    margin: 0;
-    padding: 10px 12px;
-    min-height: 34px;
-    max-height: 240px;
-    overflow: auto;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 
   .ai-box {
@@ -761,24 +999,41 @@
     font-size: 10px;
     color: var(--muted-color);
   }
-  .result-preview {
-    margin: 0;
-    padding: 12px;
-    max-height: 260px;
-    overflow: auto;
+  .editor-wrap {
+    display: flex;
+    align-items: stretch;
+    min-height: 240px;
+    max-height: 420px;
+    background: var(--background-color);
+  }
+  .gutter {
+    flex: 0 0 auto;
+    width: 48px;
+    padding: 9px 8px 9px 0;
+    overflow: hidden;
+    text-align: right;
+    background: var(--background-color);
+    border-right: 1px solid var(--border-color);
+    color: var(--muted-color);
     font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
+    font-size: 10px;
+    line-height: 18.6px;
+    user-select: none;
+  }
+  .gutter span {
+    display: block;
   }
   .result-editor {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    height: 100%;
     min-height: 240px;
     max-height: 420px;
     overflow: auto;
     font-family: var(--font-mono);
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 18.6px;
     white-space: pre;
     border: none;
     background: var(--background-color);

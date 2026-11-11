@@ -2,6 +2,10 @@ export type ConflictChoice = "ours" | "theirs" | "base" | "both";
 
 export interface ConflictBlock {
   id: number;
+  startLine: number;
+  oursStart: number;
+  baseStart: number;
+  theirsStart: number;
   oursLines: string[];
   baseLines: string[] | null;
   theirsLines: string[];
@@ -59,6 +63,10 @@ export function parseConflicts(content: string): ParsedConflict {
     flush();
     const block: ConflictBlock = {
       id: blocks.length,
+      startLine: i + 1,
+      oursStart: 0,
+      baseStart: 0,
+      theirsStart: 0,
       oursLines: [],
       baseLines: null,
       theirsLines: [],
@@ -68,6 +76,7 @@ export function parseConflicts(content: string): ParsedConflict {
     };
 
     i++;
+    block.oursStart = i + 1;
     while (
       i < lines.length &&
       !BASE.test(lines[i]) &&
@@ -82,6 +91,7 @@ export function parseConflicts(content: string): ParsedConflict {
       block.baseLabel = markerLabel(BASE.exec(lines[i]), "base");
       block.baseLines = [];
       i++;
+      block.baseStart = i + 1;
       while (i < lines.length && !SEP.test(lines[i]) && !END.test(lines[i])) {
         block.baseLines.push(lines[i]);
         i++;
@@ -92,6 +102,7 @@ export function parseConflicts(content: string): ParsedConflict {
       i++;
     }
 
+    block.theirsStart = i + 1;
     while (i < lines.length && !END.test(lines[i])) {
       block.theirsLines.push(lines[i]);
       i++;

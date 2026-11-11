@@ -4,16 +4,20 @@ Append dated entries, keep the top current, prune what is obvious from code.
 
 ## Current focus
 
-AI can now be turned off per scope: a `disabled` flag on `AiConfig` works in
-app defaults and in per-repository overrides (Settings → AI, "Disable the AI
-assistant"). While the resolved config is disabled, every AI affordance is
-hidden — the toolbar AI button, the Changes "AI generate" button and the
-conflict resolver's AI recommendation panel. Settings stays reachable so it
-can be re-enabled, and saving/clearing AI settings closes an open AI drawer
-whose session just became disabled.
+The conflict resolver now has line numbers and search. Every pane (ours/base/
+theirs, per-conflict result, whole-file preview) is rendered by the new
+`ConflictLines.svelte` component with a line-number gutter showing working-file
+positions, and a search bar (`Ctrl/Cmd + F`) matches across all conflict sides
+plus the whole file (built result in preview mode, manual text in edit mode)
+with prev/next navigation, a match counter, a case toggle and a location hint.
+The manual editor gained a scroll-synced line-number gutter; search jumps into
+it select and scroll to the match.
 
 ## Next up
 
+- Smoke-test the conflict resolver search: type a term present only in one
+  side, navigate matches across blocks and the whole file, and check the
+  manual editor jump and gutter alignment on a long file.
 - Smoke-test auto refresh: commit externally, wait ≤30s and see status/history
   update without refresh; confirm rapid alt-tabbing causes no refresh storms
   and a deleted repo folder only logs once.
@@ -73,6 +77,20 @@ whose session just became disabled.
 
 ## Decisions
 
+- 2026-11-11 — Conflict search is one bar across conflict sides plus the whole
+  file, not per-pane inputs. Why: a term can live in unchanged text, in one
+  side, or both, and a single ordered match list (blocks in order, then whole
+  file) with prev/next keeps context; per-conflict result panes are excluded
+  from the match list to avoid double-counting text that duplicates a side.
+  Line numbers are working-file positions for conflict sides (from
+  `parseConflicts`, which now records `startLine`/`oursStart`/`baseStart`/
+  `theirsStart`), the block-start position for per-conflict results, and
+  sequential 1..N for the whole-file view.
+- 2026-11-11 — The manual editor keeps a plain `textarea` with a JS-synced
+  line-number gutter (fixed 18.6px line height, no wrap), rather than a
+  code-editor dependency. Why: keeps the resolver dependency-free; search
+  inside it selects and scrolls to the match via `setSelectionRange` instead
+  of DOM highlighting.
 - 2026-11-11 — The AI off switch is a `disabled` flag inside `AiConfig`
   (app defaults and per-repo override), not a separate list of disabled paths.
   Why: it reuses the existing override model and `resolveAiConfig`, gives an
@@ -126,6 +144,29 @@ whose session just became disabled.
   requested doc flow while giving agents one current source.
 
 ## Session log
+
+### 2026-11-11 — Conflict resolver line numbers and search
+
+- `src/lib/conflicts.ts`: `ConflictBlock` gained `startLine`, `oursStart`,
+  `baseStart` and `theirsStart` (1-based working-file positions) captured
+  during parsing; verified with a tsx script covering merge and diff3 styles
+  and a marker-less file.
+- New `src/lib/components/ConflictLines.svelte`: numbered, searchable line
+  renderer (line-number gutter, per-line match highlighting, active-match
+  row highlight, `data-pane`/`data-line` attributes used as scroll targets).
+- `ConflictResolver.svelte`: sides, per-conflict results and the whole-file
+  preview use `ConflictLines`; a search bar (input, match counter, prev/next,
+  case toggle, location hint) drives a derived match list across ours/base/
+  theirs and the whole file (`manualText` when editing manually, `resolved`
+  otherwise). Enter/Shift+Enter navigate, Ctrl/Cmd+F focuses search, Escape in
+  the input clears it instead of closing the modal, and jumping to a whole-file
+  match auto-expands the preview. The manual editor has a scroll-synced
+  line-number gutter; jumps into it set the selection and scroll to the line.
+- Also hardened re-initialization: the resolver resets choices/search when the
+  conflict content changes, not just on a path change (fixes stale state when
+  a resolved file is reopened), and clears the search when the modal closes.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK. No Rust
+  changes, so `cargo` checks were not re-run.
 
 ### 2026-11-11 — Per-repo AI off switch
 

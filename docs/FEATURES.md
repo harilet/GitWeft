@@ -50,6 +50,12 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       binary-conflict handling, abort merge, and merge commits that keep all
       parents. An optional AI recommendation can propose a merged file, but it
       is text-only, never writes or stages, and the user must apply and save it.
+- [x] Conflict resolver line numbers and search: every pane (ours/base/theirs,
+      per-conflict result, whole-file preview) shows file line numbers, and a
+      search bar (`Ctrl/Cmd + F`) matches across all conflict sides and the
+      whole file with prev/next navigation, match count, case toggle and a
+      hint of where the current match is; the manual editor has a synced
+      line-number gutter and search jumps select and scroll to the match.
 
 ## In progress
 
