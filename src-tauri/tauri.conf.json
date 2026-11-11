@@ -9,7 +9,6 @@
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../build"
   },
-  
   "app": {
     "windows": [
       {
