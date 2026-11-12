@@ -160,6 +160,14 @@ it select and scroll to the match.
 - Kept all informative text: counts, section names, statuses, instructions
   ("Resolve before committing", "Working tree", "Read-only"), field labels
   ("Path"/"Head"), the TitleBar wordmark and the Welcome hero headings.
+- `app.css`: ghost buttons now render as subtle chips at rest
+  (`--surface-2` fill + `--border-strong` outline) instead of borderless
+  muted text, so controls like "Unstage all", "Use as commit message" and
+  "Resolve" are identifiable as buttons; hover/danger-text styling unchanged.
+- `app.css` + `Changes.svelte`: new `.btn.accent` variant — a light
+  accent-tinted chip derived from `--primary-color` via `color-mix` (with
+  rgba fallbacks) — applied to "Stage all" so bulk actions stand out from
+  ghost chips; shown in the Settings accent preview.
 - Verified: `npm run check` 0 errors/0 warnings. Frontend-only change, so
   `npm run build`/`cargo` checks were not re-run.
 

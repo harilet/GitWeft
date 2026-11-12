@@ -162,7 +162,7 @@
       </button>
       <span class="spacer"></span>
       <button
-        class="btn"
+        class="btn accent"
         disabled={unstaged.length === 0 || hasConflicts}
         title={hasConflicts ? "Resolve all conflicts before staging everything" : ""}
         onclick={() => app.stageAll()}>Stage all</button

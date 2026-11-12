@@ -313,6 +313,7 @@
               <div class="preview-row">
                 <button class="btn primary" tabindex="-1">Primary action</button>
                 <button class="btn" tabindex="-1">Secondary</button>
+                <button class="btn accent" tabindex="-1">Accent</button>
                 <span class="badge blue">branch</span>
                 <span class="accent-text">accent · {accent.slice(1)}</span>
               </div>
