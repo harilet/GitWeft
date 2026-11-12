@@ -223,7 +223,6 @@
   >
     <header class="settings-head">
       <div class="head-titles">
-        <span class="label">GitWeft</span>
         <h3>Settings</h3>
       </div>
       <button class="btn ghost icon" onclick={close} aria-label="Close settings">✕</button>

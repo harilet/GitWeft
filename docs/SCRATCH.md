@@ -145,6 +145,24 @@ it select and scroll to the match.
 
 ## Session log
 
+### 2026-11-12 — Removed decorative text
+
+- `Welcome.svelte`: dropped the `landing-meta` strip ("01 / Projects",
+  "N Recent · Local Repository · Git"), both `panel-head` bars ("02 / Recent" /
+  "Resume", "03 / New Session" / "Open · Init · Clone"), the row index
+  numbers in the recents and action lists, and the "GitWeft keeps every
+  repository…" panel note, plus their now-unused CSS.
+- `+page.svelte`: dropped the nav-rail `rail-head` ("Workspace" + padded item
+  count) and the `01`–`05` nav-item index numbers, plus their CSS.
+- `Modal.svelte` ("Dialog"), `Settings.svelte` ("GitWeft") and
+  `AiPanel.svelte` ("GitWeft AI"): removed the non-informative eyebrow labels
+  above dialog titles.
+- Kept all informative text: counts, section names, statuses, instructions
+  ("Resolve before committing", "Working tree", "Read-only"), field labels
+  ("Path"/"Head"), the TitleBar wordmark and the Welcome hero headings.
+- Verified: `npm run check` 0 errors/0 warnings. Frontend-only change, so
+  `npm run build`/`cargo` checks were not re-run.
+
 ### 2026-11-11 — Conflict resolver line numbers and search
 
 - `src/lib/conflicts.ts`: `ConflictBlock` gained `startLine`, `oursStart`,

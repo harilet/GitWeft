@@ -100,7 +100,6 @@
   >
     <header class="ai-head">
       <div class="head-titles">
-        <span class="label">GitWeft AI</span>
         <h3>{title}</h3>
         <span class="provider">
           {providerLabel(app.aiConfig.provider)} · {app.aiConfig.model || "no model"}

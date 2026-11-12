@@ -41,31 +41,19 @@
 </script>
 
 <div class="landing">
-  <div class="landing-meta">
-    <span class="label">01 / Projects</span>
-    <span class="label"
-      >{app.recents.length} Recent &middot; Local Repository &middot; Git</span
-    >
-  </div>
-
   <div class="landing-body">
     <section class="panel">
-      <header class="panel-head">
-        <span class="label">02 / Recent</span>
-        <span class="label">Resume</span>
-      </header>
       <div class="panel-scroll main-scrollbar">
         <h1 class="hero">Pick up where<br /><span class="accent">you left off.</span></h1>
 
         <div class="recent-list">
-          {#each app.recents as r, i (r.path)}
+          {#each app.recents as r (r.path)}
             <div class="recent-row" class:pinned={r.pinned}>
               <button
                 class="recent-main"
                 onclick={() => app.openRepo(r.path)}
                 title={r.path}
               >
-                <span class="recent-index">{String(i + 1).padStart(2, "0")}</span>
                 <span class="recent-text">
                   <span class="recent-name">{r.name}</span>
                   <span class="recent-path">{r.path}</span>
@@ -96,16 +84,11 @@
     </section>
 
     <section class="panel left-border">
-      <header class="panel-head">
-        <span class="label">03 / New Session</span>
-        <span class="label">Open &middot; Init &middot; Clone</span>
-      </header>
       <div class="panel-scroll main-scrollbar">
         <h1 class="hero">Start a<br /><span class="accent">new workspace.</span></h1>
 
         <div class="action-list">
           <button class="action-row" onclick={openRepo}>
-            <span class="action-index">01</span>
             <span class="action-text">
               <span class="action-title">Open repository</span>
               <span class="action-sub">Browse an existing local Git project.</span>
@@ -114,7 +97,6 @@
           </button>
 
           <button class="action-row" onclick={initRepo}>
-            <span class="action-index">02</span>
             <span class="action-text">
               <span class="action-title">Initialize</span>
               <span class="action-sub">Create a new repository in a folder.</span>
@@ -123,7 +105,6 @@
           </button>
 
           <button class="action-row" onclick={() => (showClone = true)}>
-            <span class="action-index">03</span>
             <span class="action-text">
               <span class="action-title">Clone</span>
               <span class="action-sub">Fetch a remote repository to disk.</span>
@@ -131,11 +112,6 @@
             <span class="action-arrow">&nearr;</span>
           </button>
         </div>
-
-        <p class="panel-note label">
-          GitWeft keeps every repository in its own session. Open several and
-          switch between them from the title bar.
-        </p>
       </div>
     </section>
   </div>
@@ -183,14 +159,6 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-  }
-  .landing-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 22px;
-    border-bottom: 1px solid var(--border-color);
-    flex: 0 0 auto;
   }
   .landing-body {
     display: flex;
@@ -248,12 +216,6 @@
     text-align: left;
     cursor: pointer;
     font-family: inherit;
-  }
-  .recent-index {
-    color: var(--primary-color);
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    flex-shrink: 0;
   }
   .recent-text {
     display: flex;
@@ -331,13 +293,6 @@
     background: var(--hover-color);
     padding-left: 12px;
   }
-  .action-index {
-    color: var(--primary-color);
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    flex-shrink: 0;
-    padding-top: 1px;
-  }
   .action-text {
     display: flex;
     flex-direction: column;
@@ -359,11 +314,5 @@
   }
   .action-row:hover .action-arrow {
     color: var(--primary-color);
-  }
-  .panel-note {
-    margin-top: 24px;
-    line-height: 1.8;
-    white-space: normal;
-    max-width: 44ch;
   }
 </style>

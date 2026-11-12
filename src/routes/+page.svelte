@@ -125,18 +125,12 @@
 
         <div class="body">
           <nav class="rail">
-            <div class="rail-head">
-              <span class="label">Workspace</span>
-              <span class="label">{String(nav.length).padStart(2, "0")}</span>
-            </div>
-
-            {#each nav as item, i (item.key)}
+            {#each nav as item (item.key)}
               <button
                 class="nav-item"
                 class:active={app.view === item.key}
                 onclick={() => (app.view = item.key)}
               >
-                <span class="nav-index">{String(i + 1).padStart(2, "0")}</span>
                 <span class="nav-label">{item.label}</span>
                 <span class="count">{item.count()}</span>
               </button>
@@ -319,14 +313,6 @@
     border-right: 1px solid var(--border-color);
     overflow: hidden;
   }
-  .rail-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border-color);
-  }
-
   .nav-item {
     display: flex;
     align-items: center;
@@ -353,15 +339,6 @@
     color: var(--text-color);
     background: var(--hover-color);
     border-left-color: var(--primary-color);
-  }
-  .nav-index {
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    color: var(--muted-color);
-    flex: 0 0 auto;
-  }
-  .nav-item.active .nav-index {
-    color: var(--primary-color);
   }
   .nav-label {
     flex: 1;

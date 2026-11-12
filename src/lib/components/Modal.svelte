@@ -36,7 +36,6 @@
   >
     <header>
       <div class="head-titles">
-        <span class="label">Dialog</span>
         <h3>{title}</h3>
       </div>
       <button class="btn ghost icon" onclick={onclose} aria-label="Close">✕</button>
