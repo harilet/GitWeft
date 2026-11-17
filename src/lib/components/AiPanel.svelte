@@ -345,12 +345,6 @@
     border: 1px solid var(--border-color);
     background: var(--background-color);
   }
-  .msg.user {
-    border-left: 2px solid var(--primary-color);
-  }
-  .msg.assistant {
-    border-left: 2px solid var(--border-strong);
-  }
   .msg-head {
     display: flex;
     align-items: center;
@@ -369,14 +363,14 @@
     border: 1px solid var(--border-color);
     background: var(--background-color);
   }
-  .tool-call.running {
-    border-left: 2px solid var(--yellow);
+  .tool-call.running .tool-state {
+    color: var(--yellow);
   }
-  .tool-call.done {
-    border-left: 2px solid var(--green);
+  .tool-call.done .tool-state {
+    color: var(--green);
   }
-  .tool-call.error {
-    border-left: 2px solid var(--red);
+  .tool-call.error .tool-state {
+    color: var(--red);
   }
   .tool-call-head {
     display: flex;
@@ -434,7 +428,7 @@
   }
   .tool-state {
     flex: 0 0 auto;
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--muted-color);
@@ -520,7 +514,7 @@
   .hint {
     text-transform: none;
     letter-spacing: 0.02em;
-    font-size: 9px;
+    font-size: 10px;
     white-space: normal;
   }
 </style>

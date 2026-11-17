@@ -30,6 +30,14 @@
     app.loadWorkingDiff(file.path, staged);
   }
 
+  /** Enter and Space both activate selection-style rows. */
+  function rowKey(e: KeyboardEvent, action: () => void) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      action();
+    }
+  }
+
   function codeClass(c: string) {
     return `code-${c === "?" ? "\\?" : c}`;
   }
@@ -96,7 +104,7 @@
             role="button"
             tabindex="0"
             onclick={() => app.openConflict(file.path)}
-            onkeydown={(e) => e.key === "Enter" && app.openConflict(file.path)}
+            onkeydown={(e) => rowKey(e, () => app.openConflict(file.path))}
           >
             <span class="file-status-code code-U">!</span>
             <span class="path">{file.path}</span>
@@ -133,7 +141,7 @@
           role="button"
           tabindex="0"
           onclick={() => select(file, true)}
-          onkeydown={(e) => e.key === "Enter" && select(file, true)}
+          onkeydown={(e) => rowKey(e, () => select(file, true))}
         >
           <span class="file-status-code {codeClass(file.index)}">{file.index}</span>
           <span class="path">{file.path}</span>
@@ -144,7 +152,7 @@
               onclick={(e) => {
                 e.stopPropagation();
                 app.unstage(file.path);
-              }}>−</button
+              }}>Unstage</button
             >
           </div>
         </div>
@@ -209,7 +217,7 @@
           role="button"
           tabindex="0"
           onclick={() => select(file, false)}
-          onkeydown={(e) => e.key === "Enter" && select(file, false)}
+          onkeydown={(e) => rowKey(e, () => select(file, false))}
         >
           <span class="file-status-code {codeClass(file.worktree)}">{file.worktree}</span>
           <span class="path">{file.path}</span>
@@ -220,7 +228,7 @@
               onclick={(e) => {
                 e.stopPropagation();
                 discard(file);
-              }}>↺</button
+              }}>Discard</button
             >
             <button
               class="btn ghost sm act"
@@ -228,7 +236,7 @@
               onclick={(e) => {
                 e.stopPropagation();
                 app.stage(file.path);
-              }}>+</button
+              }}>Stage</button
             >
           </div>
         </div>
@@ -294,16 +302,10 @@
     white-space: nowrap;
   }
   .file.conflict {
-    border-left-color: var(--yellow);
+    background: color-mix(in srgb, var(--yellow) 6%, transparent);
   }
   .file.conflict:hover {
     background: #2a2410;
-  }
-  .file.conflict .act {
-    opacity: 1;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
   }
   .files {
     flex: 1;
@@ -315,18 +317,17 @@
     gap: 10px;
     padding: 7px 14px;
     border-bottom: 1px solid rgba(36, 39, 47, 0.7);
-    border-left: 2px solid transparent;
     cursor: pointer;
     transition:
       background 0.15s ease,
-      border-color 0.15s ease;
+      box-shadow 0.15s ease;
   }
   .file:hover {
     background: var(--hover-color);
   }
   .file.selected {
     background: var(--surface-2);
-    border-left-color: var(--primary-color);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
   }
   .path {
     flex: 1;
@@ -343,14 +344,11 @@
     flex: 0 0 auto;
   }
   .act {
-    opacity: 0;
-    font-size: 13px;
+    font-size: 10px;
     line-height: 1;
-    padding: 2px 7px;
-  }
-  .file:hover .act,
-  .file.selected .act {
-    opacity: 1;
+    padding: 3px 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
   }
   .commit-box {
     display: flex;

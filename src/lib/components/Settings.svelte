@@ -23,6 +23,19 @@
   let accent = $state(loadAccent());
   let copied = $state(false);
 
+  const SHORTCUTS: { action: string; keys: string }[] = [
+    { action: "Refresh repository", keys: "Ctrl+R" },
+    { action: "Open settings", keys: "Ctrl+," },
+    { action: "Switch view (Changes…Stashes)", keys: "Ctrl+1 – Ctrl+5" },
+    { action: "Stage all changes", keys: "Ctrl+Shift+S" },
+    { action: "Commit staged changes", keys: "Ctrl+Enter" },
+    { action: "Focus commit filter", keys: "/" },
+    { action: "Focus conflict search", keys: "Ctrl+F" },
+    { action: "Open selected row", keys: "Enter / Space" },
+    { action: "Next / previous search match", keys: "Enter / Shift+Enter" },
+    { action: "Close dialog", keys: "Esc" },
+  ];
+
   let name = $state(app.user?.name ?? "");
   let email = $state(app.user?.email ?? "");
   let global = $state(false);
@@ -256,6 +269,12 @@
           {#if app.errorLog.length}
             <span class="tab-count">{app.errorLog.length}</span>
           {/if}
+        </button>
+        <button
+          class:active={app.settingsTab === "keys"}
+          onclick={() => (app.settingsTab = "keys")}
+        >
+          Shortcuts
         </button>
         <div class="spacer"></div>
         <div class="nav-note label">Saved on this device</div>
@@ -563,7 +582,7 @@
               log and diffs, branches, staged changes and unstaged changes.
             </div>
           </section>
-        {:else}
+        {:else if app.settingsTab === "errors"}
           <section class="section">
             <div class="section-head">
               <span class="label">Error log</span>
@@ -594,6 +613,20 @@
                 {/each}
               </ul>
             {/if}
+          </section>
+        {:else if app.settingsTab === "keys"}
+          <section class="section">
+            <div class="section-head">
+              <span class="label">Keyboard shortcuts</span>
+            </div>
+            <div class="keys-list">
+              {#each SHORTCUTS as s (s.action)}
+                <div class="key-row">
+                  <span class="key-action">{s.action}</span>
+                  <span class="keys mono">{s.keys}</span>
+                </div>
+              {/each}
+            </div>
           </section>
         {/if}
       </div>
@@ -632,6 +665,9 @@
         >
           Save AI settings
         </button>
+      {:else if app.settingsTab === "keys"}
+        <span class="spacer"></span>
+        <button class="btn primary" onclick={close}>Close</button>
       {:else}
         <span class="spacer"></span>
         <button class="btn" onclick={close}>Close</button>
@@ -707,7 +743,6 @@
     align-items: center;
     padding: 11px 16px;
     border: none;
-    border-left: 2px solid transparent;
     background: transparent;
     color: var(--muted-color);
     font-family: inherit;
@@ -718,8 +753,7 @@
     cursor: pointer;
     transition:
       background 0.15s ease,
-      color 0.15s ease,
-      border-color 0.15s ease;
+      color 0.15s ease;
   }
   .settings-nav button:hover {
     background: var(--hover-color);
@@ -727,21 +761,38 @@
   }
   .settings-nav button.active {
     background: var(--hover-color);
-    border-left-color: var(--primary-color);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
     color: var(--text-color);
   }
   .nav-note {
     padding: 12px 16px;
     border-top: 1px solid var(--border-color);
-    font-size: 9px;
-    line-height: 1.6;
-    white-space: normal;
+    font-size: 10px;
+  }
+  .keys-list {
+    border-top: 1px solid var(--border-color);
+  }
+  .key-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 14px;
+    border-bottom: 1px solid rgba(36, 39, 47, 0.7);
+  }
+  .key-action {
+    font-size: 12px;
+  }
+  .keys {
+    font-size: 11px;
+    color: var(--primary-color);
+    white-space: nowrap;
   }
   .tab-count {
     margin-left: auto;
     padding: 1px 6px;
     border: 1px solid var(--border-strong);
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: 0.04em;
     color: var(--muted-color);
   }
@@ -767,7 +818,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--muted-color);

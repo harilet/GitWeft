@@ -9,6 +9,16 @@
   let cloneDest = $state("");
   let cloning = $state(false);
 
+  // Accept remote URLs (https/ssh/git@) or absolute local paths.
+  const cloneUrlShape = $derived.by(() => {
+    const url = cloneUrl.trim();
+    if (!url) return null;
+    if (/^(https?|ssh):\/\//i.test(url)) return true;
+    if (/^git@[\w.-]+[:/]/.test(url)) return true;
+    if (/^~?[./]*(\/|\\)/.test(url)) return true;
+    return false;
+  });
+
   async function pickDirectory(): Promise<string | null> {
     const selected = await open({ directory: true, multiple: false });
     return typeof selected === "string" ? selected : null;
@@ -130,6 +140,12 @@
         disabled={cloning}
         use:autofocus
       />
+      {#if cloneUrlShape === false}
+        <span class="field-hint"
+          >Use an https://, ssh:// or git@host repo URL, or an absolute local
+          path.</span
+        >
+      {/if}
     </label>
     <label class="field">
       <span>Destination</span>
@@ -161,7 +177,10 @@
       >
       <button
         class="btn primary"
-        disabled={cloning || !cloneUrl.trim() || !cloneDest.trim()}
+        disabled={cloning ||
+          !cloneUrl.trim() ||
+          !cloneDest.trim() ||
+          cloneUrlShape === false}
         onclick={doClone}
       >
         {cloning ? "Cloning…" : "Clone"}
@@ -217,9 +236,6 @@
   }
   .recent-row:hover {
     background: var(--hover-color);
-  }
-  .recent-row.pinned {
-    box-shadow: inset 2px 0 0 var(--yellow);
   }
   .recent-main {
     display: flex;
@@ -353,5 +369,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .field-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--yellow);
   }
 </style>

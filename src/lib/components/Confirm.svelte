@@ -2,11 +2,18 @@
   import { app } from "../store.svelte";
 
   let boxEl = $state<HTMLDivElement | null>(null);
+  let cancelEl = $state<HTMLButtonElement | null>(null);
+  let confirmEl = $state<HTMLButtonElement | null>(null);
 
   const req = $derived(app.confirmState);
 
+  // Safe by default: focus the non-destructive button — destructive asks
+  // land on Cancel (Enter/Space then cancel; a Tab is needed to reach the
+  // destructive button), benign asks land on the confirm button.
   $effect(() => {
-    if (req) boxEl?.focus();
+    if (!req) return;
+    if (req.danger === false) confirmEl?.focus();
+    else cancelEl?.focus();
   });
 
   function settle(value: boolean | null) {
@@ -18,7 +25,7 @@
     if (e.key === "Escape") {
       e.preventDefault();
       settle(false);
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && req.danger === false) {
       e.preventDefault();
       settle(true);
     }
@@ -48,7 +55,10 @@
         <p class="details" class:danger={req.danger !== false}>{req.details}</p>
       {/if}
       <footer>
-        <button class="btn" onclick={() => settle(false)}>
+        <button
+          class="btn"
+          bind:this={cancelEl}
+          onclick={() => settle(false)}>
           {req.cancelLabel ?? "Cancel"}
         </button>
         {#if req.extra}
@@ -58,6 +68,7 @@
         {/if}
         <button
           class="btn {req.danger === false ? 'primary' : 'danger'}"
+          bind:this={confirmEl}
           onclick={() => settle(true)}>
           {req.confirmLabel ?? "Confirm"}
         </button>

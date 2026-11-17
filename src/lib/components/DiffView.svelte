@@ -121,7 +121,7 @@
     align-items: center;
     gap: 8px;
     padding: 2px 12px 2px 6px;
-    background: rgba(123, 140, 255, 0.1);
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
     color: var(--primary-color);
   }
   .meta {
@@ -162,7 +162,7 @@
     border: 1px solid var(--border-strong);
     background: transparent;
     color: var(--primary-color);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
   }
 </style>

@@ -1,12 +1,16 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { app } from "../store.svelte";
   import { autofocus } from "../actions";
 
   let open = $state(false);
   let filter = $state("");
+  let active = $state(-1);
+  let menuEl = $state<HTMLDivElement | null>(null);
 
   const locals = $derived(app.localBranches.filter(match));
   const remotes = $derived(app.remoteBranches.filter(match));
+  const items = $derived([...locals.map((b) => b.name), ...remotes.map((b) => b.name)]);
   const current = $derived(app.repo?.branch);
 
   function match(b: { name: string }) {
@@ -16,7 +20,39 @@
 
   function toggle() {
     open = !open;
-    if (open) filter = "";
+    if (open) {
+      filter = "";
+      active = -1;
+    }
+  }
+
+  async function highlight(delta: number) {
+    if (items.length === 0) return;
+    active =
+      active === -1 && delta > 0 && delta === 1
+        ? 0
+        : ((active + delta) % items.length + items.length) % items.length;
+    await tick();
+    menuEl
+      ?.querySelector(".item.active")
+      ?.scrollIntoView({ block: "nearest" });
+  }
+
+  function menukey(e: KeyboardEvent) {
+    if (!open) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      open = false;
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      void highlight(1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      void highlight(-1);
+    } else if (e.key === "Enter" && active >= 0 && active < items.length) {
+      e.preventDefault();
+      void pick(items[active]);
+    }
   }
 
   async function pick(name: string) {
@@ -26,11 +62,15 @@
   }
 </script>
 
+<svelte:window onkeydown={menukey} />
+
 <div class="switcher">
   <button
     class="chip"
     class:open
     onclick={toggle}
+    aria-haspopup="listbox"
+    aria-expanded={open}
     title="{app.repo?.path} — click to switch branch"
   >
     <span class="dot" class:dirty={app.repo?.dirty}></span>
@@ -50,19 +90,27 @@
 
   {#if open}
     <div class="backdrop" onclick={() => (open = false)} role="presentation"></div>
-    <div class="menu">
+    <div class="menu" role="listbox" aria-label="Switch branch" bind:this={menuEl}>
       <div class="filter">
         <span class="prompt">/</span>
         <input
           class="filter-input"
           placeholder="Switch branch…"
           bind:value={filter}
+          oninput={() => (active = -1)}
           use:autofocus
         />
       </div>
       <div class="list main-scrollbar">
-        {#each locals as b (b.name)}
-          <button class="item" class:current={b.isHead} onclick={() => pick(b.name)}>
+        {#each locals as b, i (b.name)}
+          <button
+            class="item"
+            class:current={b.isHead}
+            class:active={i === active}
+            role="option"
+            aria-selected={i === active}
+            onclick={() => pick(b.name)}
+          >
             <span class="check">{b.isHead ? "●" : ""}</span>
             <span class="bname">{b.name}</span>
             {#if b.upstream}<span class="up">→ {b.upstream}</span>{/if}
@@ -71,8 +119,14 @@
 
         {#if remotes.length}
           <div class="divider label">Remote branches</div>
-          {#each remotes as b (b.name)}
-            <button class="item" onclick={() => pick(b.name)}>
+          {#each remotes as b, j (b.name)}
+            <button
+              class="item"
+              class:active={locals.length + j === active}
+              role="option"
+              aria-selected={locals.length + j === active}
+              onclick={() => pick(b.name)}
+            >
               <span class="check"></span>
               <span class="bname remote-name">{b.name}</span>
             </button>
@@ -129,7 +183,7 @@
     white-space: nowrap;
   }
   .caret {
-    font-size: 9px;
+    font-size: 10px;
     color: var(--muted-color);
   }
   .backdrop {
@@ -189,7 +243,6 @@
     width: 100%;
     padding: 8px 12px;
     border: none;
-    border-left: 2px solid transparent;
     border-bottom: 1px solid rgba(36, 39, 47, 0.6);
     background: transparent;
     color: var(--text-color);
@@ -197,21 +250,19 @@
     text-align: left;
     font-family: inherit;
     font-size: 12px;
-    transition:
-      background 0.15s ease,
-      border-color 0.15s ease;
+    transition: background 0.15s ease;
   }
-  .item:hover {
+  .item:hover,
+  .item.active {
     background: var(--hover-color);
   }
   .item.current {
-    border-left-color: var(--green);
     background: var(--surface-2);
   }
   .check {
     width: 10px;
     color: var(--green);
-    font-size: 9px;
+    font-size: 10px;
     flex: 0 0 auto;
   }
   .bname {

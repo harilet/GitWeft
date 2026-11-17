@@ -58,6 +58,14 @@ async function pushCurrent() {
     return rows.toString();
   }
 
+  const VIEW_ORDER: ViewKey[] = [
+    "changes",
+    "history",
+    "branches",
+    "tags",
+    "stashes",
+  ];
+
   const nav: { key: ViewKey; label: string; count: () => string }[] = [
     { key: "changes", label: "Changes", count: changeCount },
     { key: "history", label: "History", count: () => app.log.length.toString() },
@@ -78,6 +86,26 @@ async function pushCurrent() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r" && app.repo) {
       e.preventDefault();
       app.refreshAll();
+      return;
+    }
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      e.shiftKey &&
+      e.key.toLowerCase() === "s" &&
+      app.repo
+    ) {
+      e.preventDefault();
+      if (!app.conflicts.length) app.stageAll();
+      return;
+    }
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      !e.shiftKey &&
+      /^[1-5]$/.test(e.key) &&
+      app.repo
+    ) {
+      e.preventDefault();
+      app.view = VIEW_ORDER[Number(e.key) - 1];
     }
   }
 </script>
@@ -101,7 +129,7 @@ async function pushCurrent() {
           <div class="spacer"></div>
 
           <div class="tools">
-            {#if app.remotes.length}
+          {#if app.remotes.length}
               <button
                 class="btn sm"
                 title={currentBranch?.upstream
@@ -122,12 +150,6 @@ async function pushCurrent() {
               >
               <span class="divider" aria-hidden="true"></span>
             {/if}
-            <button
-              class="btn ghost icon"
-              title="Refresh (Ctrl+R)"
-              aria-label="Refresh"
-              onclick={() => app.refreshAll()}>↻</button
-            >
             {#if !app.aiDisabled}
               <button
                 class="btn sm"
@@ -229,6 +251,11 @@ async function pushCurrent() {
           app.toast = null;
           app.openErrorLog();
         }}>View log</button
+      >
+      <button
+        class="toast-action"
+        aria-label="Dismiss"
+        onclick={() => (app.toast = null)}>✕</button
       >
     {/if}
   </div>
@@ -362,8 +389,6 @@ async function pushCurrent() {
     gap: 10px;
     padding: 11px 14px;
     border: none;
-    border-left: 2px solid transparent;
-    border-bottom: 1px solid transparent;
     background: transparent;
     color: var(--muted-color);
     font-family: inherit;
@@ -372,7 +397,7 @@ async function pushCurrent() {
     transition:
       background 0.15s ease,
       color 0.15s ease,
-      border-color 0.15s ease;
+      box-shadow 0.15s ease;
   }
   .nav-item:hover {
     background: var(--hover-color);
@@ -381,7 +406,7 @@ async function pushCurrent() {
   .nav-item.active {
     color: var(--text-color);
     background: var(--hover-color);
-    border-left-color: var(--primary-color);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
   }
   .nav-label {
     flex: 1;
@@ -398,6 +423,7 @@ async function pushCurrent() {
     min-width: 18px;
     text-align: right;
     flex: 0 0 auto;
+    white-space: nowrap;
   }
   .nav-item.active .count {
     color: var(--text-color);
@@ -487,7 +513,7 @@ async function pushCurrent() {
     background: transparent;
     color: inherit;
     font-family: inherit;
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     cursor: pointer;

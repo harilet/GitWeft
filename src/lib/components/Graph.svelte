@@ -590,7 +590,7 @@
     gap: 8px;
   }
   .hint {
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: 0.08em;
     color: var(--muted-color);
     opacity: 0.7;
@@ -699,7 +699,6 @@
   }
   .node.head {
     border-color: var(--green);
-    box-shadow: inset 2px 0 0 var(--green);
   }
   .node.head:hover {
     border-color: var(--green);
@@ -715,7 +714,7 @@
   }
   .node-icon {
     color: var(--muted-color);
-    font-size: 9px;
+    font-size: 10px;
     border: 1px solid var(--border-strong);
     width: 15px;
     height: 15px;
@@ -738,7 +737,7 @@
   }
   .node-extra {
     padding-left: 22px;
-    font-size: 9px;
+    font-size: 10px;
     line-height: 1.3;
     color: var(--muted-color);
     overflow: hidden;
@@ -746,7 +745,7 @@
     white-space: nowrap;
   }
   .chip {
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.08em;
     padding: 1px 4px;

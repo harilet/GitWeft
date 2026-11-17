@@ -44,7 +44,7 @@ import {
 } from "./ai";
 
 export type ViewKey = "changes" | "history" | "branches" | "tags" | "stashes";
-export type SettingsTab = "appearance" | "identity" | "ai" | "errors";
+export type SettingsTab = "appearance" | "identity" | "ai" | "errors" | "keys";
 export type AiMode = "chat" | "commit";
 
 export interface AiEntry {
@@ -910,6 +910,12 @@ class AppStore {
         if (document.hidden) return;
         for (const session of this.sessions) void session.autoRefresh();
       }, AUTO_REFRESH_INTERVAL);
+      // The poll skips while the window is hidden; refocusing would
+      // otherwise show up to 30s-stale data, so refresh on reveal.
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) return;
+        for (const session of this.sessions) void session.autoRefresh();
+      });
     }
   }
 
@@ -1234,8 +1240,14 @@ class AppStore {
     kind: "info" | "error" | "success" = "info",
   ) {
     this.toast = { kind, text };
-    if (this.toastTimer) clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (this.toast = null), 4500);
+    if (this.toastTimer) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
+    // Errors stay until dismissed (View log / ✕); success and info time out.
+    if (kind !== "error") {
+      this.toastTimer = setTimeout(() => (this.toast = null), 4500);
+    }
   }
 
   /** Friendly toast for a raw failure; the detailed text goes to the log. */

@@ -374,7 +374,6 @@
     gap: 10px;
     padding: 9px 14px;
     border-bottom: 1px solid rgba(36, 39, 47, 0.7);
-    border-left: 2px solid transparent;
     min-width: 0;
   }
   .row:hover {
@@ -382,16 +381,14 @@
   }
   .row.current {
     background: var(--surface-2);
-    border-left-color: var(--green);
   }
   .mark {
     color: var(--muted-color);
-    font-size: 9px;
+    font-size: 10px;
     flex: 0 0 auto;
     width: 12px;
     text-align: center;
-  }
-  .mark.on {
+  }  .mark.on {
     color: var(--green);
   }
   .name {

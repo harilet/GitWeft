@@ -38,8 +38,20 @@
           <button class="btn ghost sm" onclick={() => app.applyStash(stash.index)}>
             Apply</button
           >
-          <button class="btn ghost sm" onclick={() => app.popStash(stash.index)}>
-            Pop</button
+          <button
+            class="btn ghost sm"
+            onclick={async () => {
+              if (
+                await app.confirm({
+                  title: `Pop stash #${String(stash.index).padStart(2, "0")}?`,
+                  details:
+                    "Applies the stashed changes to the working tree and deletes the entry. If conflicts arise, the stash is kept.",
+                  confirmLabel: "Pop",
+                  danger: false,
+                })
+              )
+                app.popStash(stash.index);
+            }}>Pop</button
           >
           <button
             class="btn ghost sm danger-text"
@@ -112,11 +124,9 @@
     gap: 12px;
     padding: 10px 14px;
     border-bottom: 1px solid rgba(36, 39, 47, 0.7);
-    border-left: 2px solid transparent;
   }
   .stash:hover {
     background: var(--hover-color);
-    border-left-color: var(--purple);
   }
   .index {
     color: var(--purple);
@@ -137,11 +147,5 @@
     display: flex;
     gap: 2px;
     flex: 0 0 auto;
-  }
-
-
-  .danger-text:hover {
-    color: var(--red);
-    border-color: var(--red);
   }
 </style>

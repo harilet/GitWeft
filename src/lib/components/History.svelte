@@ -6,6 +6,27 @@
 
   let filter = $state("");
   let mode = $state<"commits" | "graph">("commits");
+  let filterInput = $state<HTMLInputElement | null>(null);
+
+  function filterKey(e: KeyboardEvent) {
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target as HTMLElement | null;
+    if (
+      t &&
+      (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)
+    )
+      return;
+    e.preventDefault();
+    filterInput?.focus();
+    filterInput?.select();
+  }
+
+  function rowKey(e: KeyboardEvent, commit: CommitInfo) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      load(commit);
+    }
+  }
 
   const refsByOid = $derived.by(() => {
     const map = new Map<string, { label: string; kind: string }[]>();
@@ -47,6 +68,8 @@
   }
 </script>
 
+<svelte:window onkeydown={filterKey} />
+
 <div class="history">
   <header class="panel-head">
     <div class="titles">
@@ -69,7 +92,8 @@
       <span class="filter-mark">/</span>
       <input
         class="filter-input"
-        placeholder="Filter commits by message, author or hash…"
+        placeholder="Filter commits by message, author or hash…  ( / to focus)"
+        bind:this={filterInput}
         bind:value={filter}
       />
       <span class="label">{commits.length} shown</span>
@@ -83,7 +107,7 @@
           role="button"
           tabindex="0"
           onclick={() => load(commit)}
-          onkeydown={(e) => e.key === "Enter" && load(commit)}
+          onkeydown={(e) => rowKey(e, commit)}
         >
           <span class="oid mono">{commit.short}</span>
           <span class="summary">{commit.summary || "(no message)"}</span>
@@ -176,18 +200,17 @@
     gap: 12px;
     padding: 9px 14px;
     border-bottom: 1px solid rgba(36, 39, 47, 0.7);
-    border-left: 2px solid transparent;
     cursor: pointer;
     transition:
       background 0.15s ease,
-      border-color 0.15s ease;
+      box-shadow 0.15s ease;
   }
   .commit:hover {
     background: var(--hover-color);
   }
   .commit.selected {
     background: var(--surface-2);
-    border-left-color: var(--primary-color);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
   }
   .oid {
     flex: 0 0 auto;

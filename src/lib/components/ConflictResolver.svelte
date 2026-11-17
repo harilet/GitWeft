@@ -1007,8 +1007,8 @@
   }
   .chevron {
     color: var(--muted-color);
-    font-size: 9px;
-    width: 9px;
+    font-size: 10px;
+    width: 10px;
     flex: 0 0 auto;
   }
 
@@ -1044,15 +1044,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .side.ours {
-    box-shadow: inset 3px 0 0 var(--primary-color);
-  }
-  .side.theirs {
-    box-shadow: inset 3px 0 0 var(--yellow);
-  }
-  .side.base {
-    box-shadow: inset 3px 0 0 var(--muted-color);
-  }
   .side.ours .side-head .label {
     color: var(--primary-color);
   }
@@ -1060,10 +1051,10 @@
     color: var(--yellow);
   }
   .side.chosen {
-    background: rgba(123, 140, 255, 0.08);
+    background: color-mix(in srgb, var(--primary-color) 8%, transparent);
   }
   .side.theirs.chosen {
-    background: rgba(209, 176, 107, 0.08);
+    background: color-mix(in srgb, var(--yellow) 8%, transparent);
   }
 
   .block-result {

@@ -3,6 +3,19 @@
   box-sizing: border-box;
 }
 
+/* One visible focus indicator for the whole app; text fields keep their
+   accent border instead. */
+:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+.input:focus-visible,
+.textarea:focus-visible,
+.filter-input:focus-visible,
+.create-input:focus-visible {
+  outline: none;
+}
+
 ::selection {
   background: var(--primary-color);
   color: var(--background-color);
@@ -128,21 +141,16 @@
   border-color: var(--border-strong);
 }
 .btn.accent {
-  border-color: rgba(123, 140, 255, 0.4);
-  background: rgba(123, 140, 255, 0.12);
-  color: var(--primary-color);
   border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
   background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
 }
 .btn.accent:hover {
   border-color: var(--primary-color);
-  background: rgba(123, 140, 255, 0.22);
   background: color-mix(in srgb, var(--primary-color) 22%, transparent);
   color: var(--accent-hover);
 }
 .btn.accent:disabled:hover {
-  border-color: rgba(123, 140, 255, 0.4);
-  background: rgba(123, 140, 255, 0.12);
   border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
   background: color-mix(in srgb, var(--primary-color) 12%, transparent);
 }

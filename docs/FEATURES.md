@@ -71,8 +71,11 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       would land from the branch into HEAD ahead of the merge, so merging
       never fires without a themed confirm.
 - [x] Toolbar regroup: Pull/Push form the network group (Fetch lives in
-      Branches → Remotes; silent auto-fetch still covers opening), Refresh
-      is an icon button, and a divider separates network from app functions.
+      Branches → Remotes; silent auto-fetch still covers opening), and a
+      divider separates network from app functions. There is no toolbar
+      refresh button: sessions poll every 30 seconds while the window is
+      visible, refresh immediately when the window is shown again, and
+      `Ctrl/Cmd+R` forces a manual refresh.
 - [x] Clone progress is mirrored into the Welcome clone modal (live
       `git-progress` line), the dialog locks and disables inputs while
       cloning, and a failed clone keeps the entered URL/destination.
@@ -89,6 +92,28 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       palette, `prefers-reduced-motion` disables transitions and
       animations, the nav-rail Changes count reflects the rows actually
       displayed, and the commit label drops its trailing space at 0 files.
+- [x] Destructive confirms are safe by default: focus lands on Cancel (a
+      Tab is needed to reach the destructive button) and Enter only
+      confirms benign asks (push, merge); destructive requests require an
+      explicit click.
+- [x] Accent washes derive from `--primary-color` via `color-mix`, so the
+      accent setting now reaches DiffView hunk bars and chosen conflict
+      sides, not just buttons and focus states; the smallest letterforms
+      sit on a uniform 10px floor.
+- [x] Keyboard support: global `:focus-visible` outline, Space as well as
+      Enter on list rows, visible-at-rest text row actions (Stage /
+      Unstage / Discard / Resolve), `/` focuses the History filter, branch
+      switcher supports Escape and arrow/Enter navigation with listbox
+      ARIA, `Ctrl/Cmd+1–5` switch views, `Ctrl/Cmd+Shift+S` stages
+      everything, and Settings → Shortcuts lists every binding.
+- [x] The left-edge stripe idiom is replaced by background/inset-ring
+      treatment across file rows, commit rows, branch rows, nav items and
+      settings tabs; conflict and AI tool rows carry their state in status
+      text and tints instead of edge colors.
+- [x] Edge hardening: popping a stash asks for confirmation, the clone
+      dialog validates URL shape as you type (https/ssh/git@ or absolute
+      path) before enabling Clone, and error toasts stay until dismissed
+      (View log / ✕) while success and info toasts keep their timer.
 
 ## In progress
 

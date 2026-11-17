@@ -4,23 +4,29 @@ Append dated entries, keep the top current, prune what is obvious from code.
 
 ## Current focus
 
-The five-step impeccable pass is complete (harden, distill, clarify,
-onboard+typeset, polish). The polish sweep promoted one shared
-`.danger-text` (red at rest, brighter on hover) and deleted the three
-conflicting local definitions (Branches' muted-at-rest variant included),
-joined toast colors to the danger/badge palette, added a global
-`prefers-reduced-motion` query, fixed the nav-rail Changes count to mirror
-the rows actually displayed (staged + unstaged, conflicts de-duplicated,
-plus conflicts), and dropped the commit button's trailing space at 0 files.
-The keyboard/focus accessibility work from the critique remains parked by
-explicit user decision ("we don't use the keyboard much"); revisit if
-keyboard use becomes common.
+The final critique round landed everything that had been parked: visible
+row actions (text chips, Space/Enter activation, global `:focus-visible`),
+the keyboard system (`/` filter focus, Ctrl+1–5 views, Ctrl+Shift+S stage
+all, branch-switcher Escape + arrow/Enter with listbox ARIA, and a
+Settings → Shortcuts sheet), the left-edge stripe idiom replaced by
+background/inset-ring treatments everywhere, stash Pop confirmation, clone
+URL shape validation, and sticky error toasts with a dismiss button. The
+keyboard-deferral decision is now superseded — the whole 25/40 critique
+backlog is closed.
 
 ## Next up
 
 - Smoke-test everything on the conflict fixture
-  (`/home/cyber/Documents/test/git conflicts`): themed confirms, resolver
-  collapse/progress, draft restore, merge preview, abort merge.
+  (`/home/cyber/Documents/test/git conflicts`): themed confirms with the
+  new safe-default focus, resolver collapse/progress, draft restore, merge
+  preview, abort merge.
+- Try the new keyboard system end-to-end: Ctrl+1 between views, / to
+  filter, Ctrl+Shift+S, arrow keys in the branch switcher.
+- Confirm the new keyboard-facility copy in Settings → Shortcuts matches
+  real behavior (the sheet lists bindings; keep it in sync when adding
+  keys).
+- Confirm "Ctrl" reads as "Cmd" for mac users in the Shortcuts sheet copy
+  (bindings accept both; the copy is Ctrl-centred).
 
 - Smoke-test the themed confirms: discard an untracked file (copy says it is
   deleted), push with and without upstream, force-delete an unmerged branch
@@ -144,6 +150,12 @@ keyboard use becomes common.
 - 2026-11-11 — The poll refreshes every open session, not just the active one.
   Why: sessions are tabs in one window, snapshots are cheap and stateless, and
   it keeps background tabs and nav-rail counts fresh.
+- 2026-11-17 — The toolbar Refresh button was removed after Fetch; the
+  guarantee is the 30-second visible-window poll plus an immediate
+  `autoRefresh` on `visibilitychange` (the poll skips while hidden, so
+  refocusing would otherwise show stale data), with `Ctrl/Cmd+R` as the
+  manual override. Why: automation covers "sooner" better than a button
+  the shortcut already duplicated.
 - 2026-11-11 — Poll failures are silent except for one error-log entry per
   outage. Why: a repo unreachable offline or deleted externally must not toast
   every 30 seconds.
@@ -184,6 +196,70 @@ keyboard use becomes common.
   requested doc flow while giving agents one current source.
 
 ## Session log
+
+### 2026-11-17 — Final critique round: row actions, keyboard system, idiom, edges
+
+A third critique put the previously parked keyboard/idiom work in scope.
+
+- Row actions (`Changes.svelte`): `+`/`−`/`↺` glyphs became text chips in
+  the 10px uppercase button language (Stage / Unstage / Discard; conflicts
+  keep Resolve), visible at rest instead of hover-only; rows accept Space
+  as well as Enter (`rowKey` helper, `e.preventDefault`). History commit
+  rows match.
+- Global `:focus-visible` outline in `app.css` (2px accent, offset 2);
+  text fields keep their accent border (inputs/textareas/filter/create
+  inputs excluded).
+- Keyboard system: `/` focuses and selects the History filter input
+  (window handler typed-target guarded); `Ctrl/Cmd+1–5` switches views via
+  `VIEW_ORDER`; `Ctrl/Cmd+Shift+S` stages everything (skipped while
+  conflicts exist); branch switcher gained Escape-to-close, ArrowUp/Down
+  with a scroll-into-view highlight, Enter-to-pick, `role="listbox"`/
+  `option`/`aria-selected`/`aria-haspopup`/`aria-expanded`; Settings gained
+  a "Shortcuts" tab (`settingsTab` union extended with "keys", SHORTCUTS
+  sheet, footer Close).
+- Stripe idiom removed: selected file/commit rows get `surface-2` + inset
+  `border-strong` ring; conflict file row gets a 6% yellow tint; current
+  branch rows and switcher items keep their surface-2 + markers; nav rail
+  and settings tabs use the 1px ring; AI message boxes and tool-call rows
+  carry state via colored `.tool-state` text instead of edge colors; stash
+  rows/tag rows/graph head node/welcome pinned rows drop decorative edges;
+  resolver side panes keep their colored side-head labels without the 3px
+  inset stripes.
+- Edges: stash Pop asks for confirmation (danger:false, explains that the
+  entry is deleted); the clone modal validates URL shape per keystroke
+  (https|ssh|git@|absolute path) with an inline hint and a disabled Clone
+  button; error toasts no longer auto-dismiss (View log / ✕ buttons),
+  success/info keep the 4.5s timer (`showToast` splits timer by kind).
+- Fixed two block-structure slips during the Settings tab wiring: a keys
+  `{:else if}` initially landed inside the AI section's inner `{:else}`
+  and was moved into the footer chain; the content chain's final `{:else}`
+  (errors) became an explicit `{:else if errors}`.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  impeccable detector on all 13 changed files: no findings; grep confirms
+  no 2px edge stripes remain (only 1px separators). No Rust changes.
+
+### 2026-11-17 — Follow-up critique fixes: safe confirms, type floor, accent tokens
+
+A follow-up critique (user-scoped: keyboard bundle still deferred, all-mono
+type identity accepted) produced three fixes:
+
+- `Confirm.svelte`: focus lands on the non-destructive button (Cancel for
+  danger asks, confirm for benign); Enter only settles benign requests, so
+  destructive work always needs an explicit click.
+- Type floor: every 9px/8px letterform (Graph hint/labels/chip, AiPanel tool
+  state and hint, Settings notes/tab-count/rows, BranchSwitcher caret/check,
+  DiffView mode chip, Branch/Tags marks, resolver chevron, toast action) is
+  now 10px; the chevron width followed to 10px.
+- Accent tokens: washes now derive from tokens via `color-mix` —
+  `.btn.accent` (duplicates collapsed to single declarations),
+  ConflictResolver `.side.chosen` (primary 8%; theirs stays yellow via
+  `--yellow`), DiffView `.hunk` (primary 10%) — so the Settings accent
+  picker now reaches hunks and chosen sides. Leftover `.danger-text:hover`
+  blocks in Tags/Stashes deleted; nav-rail count gained nowrap/no-shrink so
+  "12/34"-style counts do not clip.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  impeccable detector clean; grep confirms no `rgba(123, 140, 255` or
+  sub-10px font sizes remain. No Rust changes.
 
 ### 2026-11-17 — Polish: shared danger affordance, palette, reduced motion
 

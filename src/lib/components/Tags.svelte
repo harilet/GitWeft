@@ -118,7 +118,6 @@
     gap: 4px;
     padding: 10px 14px;
     border-bottom: 1px solid rgba(36, 39, 47, 0.7);
-    border-left: 2px solid transparent;
   }
   .tag:hover {
     background: var(--hover-color);
@@ -132,7 +131,7 @@
   .mark {
     color: var(--primary-color);
     border: 1px solid var(--border-strong);
-    font-size: 9px;
+    font-size: 10px;
     width: 16px;
     height: 16px;
     display: inline-flex;
@@ -157,11 +156,6 @@
     flex: 0 0 auto;
   }
 
-
-  .danger-text:hover {
-    color: var(--red);
-    border-color: var(--red);
-  }
   .msg {
     padding-left: 26px;
     font-size: 11px;
