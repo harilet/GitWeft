@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { FileStatus } from "../api";
-  import { confirm } from "@tauri-apps/plugin-dialog";
   import { app } from "../store.svelte";
 
   let selected = $state<string | null>(null);
@@ -36,8 +35,30 @@
   }
 
   async function abortMerge() {
-    if (await confirm("Abort the merge and restore the pre-merge state?"))
+    if (
+      await app.confirm({
+        title: "Abort merge?",
+        details:
+          "Aborts the merge and restores the pre-merge state. Files already resolved in this merge are restored to their pre-merge content.",
+        confirmLabel: "Abort merge",
+        danger: true,
+      })
+    )
       app.abortMerge();
+  }
+
+  async function discard(file: FileStatus) {
+    const untracked = file.worktree === "?";
+    const ok = await app.confirm({
+      title: "Discard changes?",
+      message: file.path,
+      details: untracked
+        ? "This file is untracked — discarding deletes it from disk. It cannot be restored from Git."
+        : "All working-tree changes in this file are reset to the last commit and cannot be recovered.",
+      confirmLabel: "Discard",
+      danger: true,
+    });
+    if (ok) app.discard(file.path);
   }
 </script>
 
@@ -196,10 +217,9 @@
             <button
               class="btn ghost sm act"
               title="Discard changes"
-              onclick={async (e) => {
+              onclick={(e) => {
                 e.stopPropagation();
-                if (await confirm(`Discard changes in ${file.path}?`))
-                  app.discard(file.path);
+                discard(file);
               }}>↺</button
             >
             <button

@@ -4,17 +4,24 @@ Append dated entries, keep the top current, prune what is obvious from code.
 
 ## Current focus
 
-The conflict resolver now has line numbers and search. Every pane (ours/base/
-theirs, per-conflict result, whole-file preview) is rendered by the new
-`ConflictLines.svelte` component with a line-number gutter showing working-file
-positions, and a search bar (`Ctrl/Cmd + F`) matches across all conflict sides
-plus the whole file (built result in preview mode, manual text in edit mode)
-with prev/next navigation, a match counter, a case toggle and a location hint.
-The manual editor gained a scroll-synced line-number gutter; search jumps into
-it select and scroll to the match.
+Step 1 of an impeccable design pass landed: all eight native `confirm()`
+dialogs (discard, delete/force-delete branch, abort merge, toolbar and
+per-remote push, remove remote, delete tag, drop stash) were replaced by a
+themed in-app `Confirm.svelte` dialog driven by a store-level confirm queue
+(`app.confirm()` returns a promise; concurrent asks settle in order). Each
+dialog names the action and the consequence, including untracked-file
+deletion on discard and ahead-count/upstream notes on push. The conflict
+resolver now saves a per-file `ConflictDraft` (choices, manual text, preview
+mode) in the repo session, restores it on reopen, and guards every close
+path (Esc, backdrop, ✕, Cancel) with a Cancel / Keep choices / Discard
+dialog while dirty. Remaining steps: distill, clarify, onboard+typeset,
+polish.
 
 ## Next up
 
+- Smoke-test the themed confirms: discard an untracked file (copy says it is
+  deleted), push with and without upstream, force-delete an unmerged branch
+  and confirm the queued confirm flow when two asks overlap.
 - Smoke-test the conflict resolver search: type a term present only in one
   side, navigate matches across blocks and the whole file, and check the
   manual editor jump and gutter alignment on a long file.
@@ -77,6 +84,18 @@ it select and scroll to the match.
 
 ## Decisions
 
+- 2026-11-17 — Native confirm dialogs were replaced by an in-app themed
+  `Confirm.svelte` backed by a queue in the app store. Why: the stock OS
+  dialogs broke the frameless shell at the highest-stress moments; a store
+  queue keeps concurrent `await`s correct, and a `boolean | null` result
+  (null = the optional middle button) lets the resolver close guard offer
+  Cancel / Keep choices / Discard from one shared component.
+- 2026-11-17 — Conflict resolver state is persisted as a per-path
+  `ConflictDraft` map on `RepoSession`, not component state. Why: the
+  resolver remounts per file (`#key`) and must survive close/reopen; the
+  store prunes drafts in `applySnapshot` when a file is no longer conflicted
+  and on successful `resolveConflict`, and binary files are excluded because
+  nothing there is editable.
 - 2026-11-11 — Conflict search is one bar across conflict sides plus the whole
   file, not per-pane inputs. Why: a term can live in unchanged text, in one
   side, or both, and a single ordered match list (blocks in order, then whole
@@ -144,6 +163,34 @@ it select and scroll to the match.
   requested doc flow while giving agents one current source.
 
 ## Session log
+
+### 2026-11-17 — Themed confirms + conflict resolver state guard
+
+- New `src/lib/components/Confirm.svelte`: themed destructive/affirmative
+  confirm dialog (danger flag square, loss-details panel, Esc = cancel,
+  Enter = confirm, optional middle button) with `role="alertdialog"`,
+  rendered once from `+page.svelte`, z-index above the resolver and other
+  modals, below toasts.
+- `store.svelte.ts`: `AppStore.confirm()`/`settleConfirm()`/`confirmActive`
+  with an ordered queue; `RepoSession.conflictDrafts` (per-path
+  `ConflictDraft`), `saveConflictDraft`/`discardConflictDraft`, draft pruning
+  in `applySnapshot`, draft clear in `resolveConflict` and proxies on the
+  store.
+- Replaced the native `confirm()` from `@tauri-apps/plugin-dialog` in
+  `Changes.svelte` (discard with untracked-file deletion copy, abort merge),
+  `Branches.svelte` (single-flow merged vs force delete, per-remote push
+  with ahead/upstream note, remove remote), `Tags.svelte`, `Stashes.svelte`
+  and `+page.svelte` (toolbar push now via `pushCurrent()` with ahead count
+  and upstream setting note). `Welcome.svelte` still uses plugin-dialog
+  `open` for folder picking.
+- `ConflictResolver.svelte`: dirty state derived from choices vs defaults and
+  manual text vs file content; `requestClose()` guards Esc, backdrop click,
+  the ✕ button and Cancel with the Cancel / Keep choices / Discard dialog;
+  keydown handler is inert while a confirm is open; per-file drafts are
+  restored on open and saved on every change (binary files excluded).
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  impeccable detector on the changed files: no findings. No Rust changes, so
+  `cargo` checks were not re-run.
 
 ### 2026-11-12 — Removed decorative text
 

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { confirm } from "@tauri-apps/plugin-dialog";
   import { app } from "../store.svelte";
   import {
     buildResolved,
@@ -51,6 +50,17 @@
   );
 
   const resolved = $derived(buildResolved(parsed.segments, choices));
+
+  const dirty = $derived.by(() => {
+    const file = conflict;
+    if (!file || file.binary) return false;
+    const defaults = defaultChoices(parsed.blocks);
+    for (const id of Object.keys(defaults)) {
+      if (choices[Number(id)] !== defaults[Number(id)]) return true;
+    }
+    if (manual && manualText !== file.content) return true;
+    return false;
+  });
 
   const queryText = $derived(query.trim());
   const manualLines = $derived(manualText.split("\n"));
@@ -110,13 +120,36 @@
     )
       return;
     initializedFor = { path: file.path, content: file.content };
-    choices = defaultChoices(parsed.blocks);
-    const needsManual = !file.binary && parsed.blocks.length === 0;
-    manual = needsManual;
-    showFullFile = needsManual;
-    manualText = file.content;
+    const draft = app.conflictDrafts[file.path];
+    if (draft && draft.content === file.content && !file.binary) {
+      choices = { ...draft.choices };
+      manual = draft.manual;
+      manualText = draft.manualText ?? file.content;
+      showFullFile = draft.showFullFile;
+    } else {
+      choices = defaultChoices(parsed.blocks);
+      const needsManual = !file.binary && parsed.blocks.length === 0;
+      manual = needsManual;
+      showFullFile = needsManual;
+      manualText = file.content;
+    }
     query = "";
     matchIndex = 0;
+  });
+
+  // Persist resolver state for the open file so a close/reopen cycle keeps
+  // choices and manual edits. The store prunes drafts of resolved files.
+  $effect(() => {
+    const file = conflict;
+    if (!file || file.binary) return;
+    app.saveConflictDraft({
+      path: file.path,
+      content: file.content,
+      choices: { ...choices },
+      manual,
+      manualText: manual ? manualText : undefined,
+      showFullFile,
+    });
   });
 
   function setChoice(id: number, choice: ConflictChoice) {
@@ -199,6 +232,29 @@
     );
   }
 
+  let closing = false;
+
+  async function requestClose() {
+    if (saving || closing || app.confirmActive) return;
+    if (!dirty) {
+      app.closeConflict();
+      return;
+    }
+    closing = true;
+    const result = await app.confirm({
+      title: "Close the resolver?",
+      details:
+        "Discarding loses the choices and manual edits for this file. The conflict stays unresolved.",
+      confirmLabel: "Discard",
+      danger: true,
+      extra: { label: "Keep choices" },
+    });
+    closing = false;
+    if (result === false) return;
+    if (result === true && conflict) app.discardConflictDraft(conflict.path);
+    app.closeConflict();
+  }
+
   async function takeSide(side: "ours" | "theirs" | "base") {
     const file = app.conflict;
     if (!file || saving) return;
@@ -207,10 +263,15 @@
       (side === "theirs" && !file.hasTheirs);
     const label =
       side === "ours" ? "ours" : side === "theirs" ? "theirs" : "the base";
-    const prompt = deleting
-      ? `Delete ${file.path}? This resolves the conflict by accepting the deletion.`
-      : `Replace the whole file with ${label}? Other changes to this file will be lost.`;
-    if (!(await confirm(prompt))) return;
+    const ok = await app.confirm({
+      title: deleting ? `Delete ${file.path}?` : `Replace the file with ${label}?`,
+      details: deleting
+        ? "Resolves the conflict by keeping the side that removed the file. The file is deleted and staged as resolved."
+        : "The chosen side overwrites the working file. Changes from other sides and manual edits in this resolver are discarded.",
+      confirmLabel: deleting ? "Delete file" : "Replace file",
+      danger: true,
+    });
+    if (!ok) return;
     saving = true;
     await app.resolveConflict(file.path, side, null);
     saving = false;
@@ -229,7 +290,15 @@
   }
 
   async function abortMerge() {
-    if (await confirm("Abort the merge and restore the pre-merge state?"))
+    if (
+      await app.confirm({
+        title: "Abort merge?",
+        details:
+          "Aborts the merge and restores the pre-merge state. Files already resolved in this merge are restored to their pre-merge content.",
+        confirmLabel: "Abort merge",
+        danger: true,
+      })
+    )
       app.abortMerge();
   }
 
@@ -301,6 +370,7 @@
   }
 
   function onkey(e: KeyboardEvent) {
+    if (app.confirmActive) return;
     if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
       if (conflict && !conflict.binary) {
         e.preventDefault();
@@ -309,7 +379,7 @@
       }
       return;
     }
-    if (e.key === "Escape" && !saving) app.closeConflict();
+    if (e.key === "Escape" && !saving) requestClose();
   }
 </script>
 
@@ -320,8 +390,7 @@
   <div
     class="overlay"
     role="presentation"
-    onclick={() => !saving && app.closeConflict()}
-    onkeydown={(e) => e.key === "Escape" && !saving && app.closeConflict()}
+    onclick={() => requestClose()}
   >
     <div
       class="modal"
@@ -340,7 +409,7 @@
           class="btn ghost icon"
           aria-label="Close"
           disabled={saving}
-          onclick={() => app.closeConflict()}>✕</button
+          onclick={() => requestClose()}>✕</button
         >
       </header>
 
@@ -708,7 +777,7 @@
         <button
           class="btn sm"
           disabled={saving}
-          onclick={() => app.closeConflict()}>Cancel</button
+          onclick={() => requestClose()}>Cancel</button
         >
         {#if !conflict.binary}
           <button class="btn primary sm" disabled={saving} onclick={save}>

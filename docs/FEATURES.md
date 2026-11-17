@@ -56,6 +56,14 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       whole file with prev/next navigation, match count, case toggle and a
       hint of where the current match is; the manual editor has a synced
       line-number gutter and search jumps select and scroll to the match.
+- [x] Themed in-app confirm dialogs replace the native OS dialogs for discard,
+      branch delete (merged vs force), abort merge, push, remove remote,
+      delete tag and drop stash; each states exactly what is lost, and a
+      store-level queue settles concurrent confirms in order.
+- [x] The conflict resolver persists choices, manual edits and preview state
+      per conflicted file while the merge is open; closing a dirty resolver
+      offers Cancel / Keep choices / Discard instead of silently losing work,
+      and reopening the file restores the saved state.
 
 ## In progress
 

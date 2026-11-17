@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { confirm } from "@tauri-apps/plugin-dialog";
   import { app } from "../store.svelte";
 
   let message = $state("");
@@ -45,7 +44,15 @@
           <button
             class="btn ghost sm danger-text"
             onclick={async () => {
-              if (await confirm(`Drop stash #${stash.index}?`))
+              if (
+                await app.confirm({
+                  title: `Drop stash #${String(stash.index).padStart(2, "0")}?`,
+                  details:
+                    "The stash entry is permanently deleted and can no longer be applied. This cannot be undone.",
+                  confirmLabel: "Drop",
+                  danger: true,
+                })
+              )
                 app.dropStash(stash.index);
             }}>Drop</button
           >

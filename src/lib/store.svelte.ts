@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import type { ConflictChoice } from "./conflicts";
 import {
   git,
   type BranchGraph,
@@ -59,6 +60,30 @@ export interface DiffTarget {
   patch: string;
   path?: string;
   staged?: boolean;
+}
+
+export interface ConfirmOptions {
+  title: string;
+  message?: string;
+  details?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  extra?: { label: string };
+  danger?: boolean;
+}
+
+interface ConfirmRequest extends ConfirmOptions {
+  resolve: (value: boolean | null) => void;
+}
+
+/** Saved conflict-resolver state, kept per conflicted file path. */
+export interface ConflictDraft {
+  path: string;
+  content: string;
+  choices: Record<number, ConflictChoice>;
+  manual: boolean;
+  manualText?: string;
+  showFullFile: boolean;
 }
 
 let sessionCounter = 0;
@@ -179,6 +204,7 @@ export class RepoSession {
 
   conflict = $state<ConflictFile | null>(null);
   conflictLoading = $state(false);
+  conflictDrafts = $state<Record<string, ConflictDraft>>({});
 
   commitMessage = $state("");
 
@@ -289,6 +315,16 @@ export class RepoSession {
       const path = this.conflict.path;
       if (!this.conflicts.some((f) => f.path === path)) this.conflict = null;
     }
+    const stillConflicted = new Set(this.conflicts.map((f) => f.path));
+    const drafts = { ...this.conflictDrafts };
+    let pruned = false;
+    for (const draftPath of Object.keys(drafts)) {
+      if (!stillConflicted.has(draftPath)) {
+        delete drafts[draftPath];
+        pruned = true;
+      }
+    }
+    if (pruned) this.conflictDrafts = drafts;
   }
 
   /**
@@ -424,6 +460,16 @@ export class RepoSession {
     this.conflict = null;
   }
 
+  saveConflictDraft(draft: ConflictDraft) {
+    this.conflictDrafts = { ...this.conflictDrafts, [draft.path]: draft };
+  }
+
+  discardConflictDraft(path: string) {
+    const next = { ...this.conflictDrafts };
+    delete next[path];
+    this.conflictDrafts = next;
+  }
+
   async resolveConflict(
     path: string,
     side: "ours" | "theirs" | "base" | null,
@@ -435,6 +481,7 @@ export class RepoSession {
     if (!ok) return false;
 
     this.conflict = null;
+    this.discardConflictDraft(path);
     await this.refreshAll();
     const remaining = this.conflicts.length;
     this.app.notify(
@@ -798,8 +845,33 @@ class AppStore {
     null,
   );
   progress = $state<string | null>(null);
+  confirmState = $state<ConfirmRequest | null>(null);
   private globalBusy = $state(false);
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private confirmQueue: ConfirmRequest[] = [];
+
+  /**
+   * In-app themed replacement for native confirm dialogs. Multiple concurrent
+   * callers queue in order; every request settles exactly once.
+   */
+  confirm(opts: ConfirmOptions): Promise<boolean | null> {
+    return new Promise((resolve) => {
+      const request: ConfirmRequest = { ...opts, resolve };
+      if (this.confirmState) this.confirmQueue.push(request);
+      else this.confirmState = request;
+    });
+  }
+
+  settleConfirm(value: boolean | null) {
+    const current = this.confirmState;
+    if (!current) return;
+    this.confirmState = this.confirmQueue.shift() ?? null;
+    current.resolve(value);
+  }
+
+  get confirmActive(): boolean {
+    return this.confirmState !== null;
+  }
 
   constructor() {
     void listen<{ operation: string; line: string }>(
@@ -909,6 +981,9 @@ class AppStore {
   get conflicts() {
     return this.active?.conflicts ?? [];
   }
+  get conflictDrafts(): Record<string, ConflictDraft> {
+    return this.active?.conflictDrafts ?? {};
+  }
   get commitMessage(): string {
     return this.active?.commitMessage ?? "";
   }
@@ -963,6 +1038,12 @@ class AppStore {
   }
   closeConflict() {
     return this.active?.closeConflict();
+  }
+  saveConflictDraft(draft: ConflictDraft) {
+    return this.active?.saveConflictDraft(draft);
+  }
+  discardConflictDraft(path: string) {
+    return this.active?.discardConflictDraft(path);
   }
   resolveConflict(
     path: string,

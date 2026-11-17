@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { confirm } from "@tauri-apps/plugin-dialog";
   import { app } from "../store.svelte";
   import { autofocus } from "../actions";
   import Modal from "./Modal.svelte";
@@ -43,15 +42,43 @@
   }
 
   async function removeBranch(name: string, merged: boolean) {
+    const ok = merged
+      ? await app.confirm({
+          title: `Delete ${name}?`,
+          details:
+            "The branch is fully merged, so no commits will be lost. The branch reference is removed.",
+          confirmLabel: "Delete",
+          danger: false,
+        })
+      : await app.confirm({
+          title: `Force delete ${name}?`,
+          details:
+            "This branch has unmerged commits. Deleting it orphans those commits — they can no longer be restored from this branch.",
+          confirmLabel: "Force delete",
+          danger: true,
+        });
+    if (ok) await app.deleteBranch(name, !merged);
+  }
+
+  async function pushRemote(remoteName: string) {
+    const branch = currentBranch?.name;
+    if (!branch) return;
+    const ahead = app.repo?.ahead ?? 0;
+    const parts = [
+      ahead > 0
+        ? `${ahead} commit${ahead === 1 ? "" : "s"} will be published to ${remoteName}/${branch}.`
+        : `Publishes ${branch} to ${remoteName}/${branch}.`,
+      trackedBy(remoteName) ? null : "This also sets upstream tracking.",
+    ].filter(Boolean);
     if (
-      !merged &&
-      !(await confirm(
-        `Branch "${name}" has unmerged commits. Force delete it? Unmerged commits will be lost.`,
-      ))
+      await app.confirm({
+        title: `Push ${branch} to ${remoteName}?`,
+        details: parts.join(" "),
+        confirmLabel: "Push",
+        danger: false,
+      })
     )
-      return;
-    if (!(await confirm(`Delete branch "${name}"?`))) return;
-    await app.deleteBranch(name, !merged);
+      app.push(remoteName, branch, !trackedBy(remoteName));
   }
 </script>
 
@@ -191,23 +218,20 @@
             <button
               class="btn ghost sm"
               disabled={!currentBranch}
-              onclick={async () => {
-                if (
-                  await confirm(
-                    `Push ${currentBranch?.name} to ${remote.name}?`,
-                  )
-                )
-                  app.push(
-                    remote.name,
-                    currentBranch?.name ?? null,
-                    !trackedBy(remote.name),
-                  );
-              }}>Push</button
+              onclick={() => pushRemote(remote.name)}>Push</button
             >
             <button
               class="btn ghost sm danger-text"
               onclick={async () => {
-                if (await confirm(`Remove remote "${remote.name}"?`))
+                if (
+                  await app.confirm({
+                    title: `Remove remote "${remote.name}"?`,
+                    details:
+                      "The remote entry (name and URL) is removed from the configuration. Branches and commits are not affected.",
+                    confirmLabel: "Remove",
+                    danger: true,
+                  })
+                )
                   app.removeRemote(remote.name);
               }}>Remove</button
             >

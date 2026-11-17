@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { confirm } from "@tauri-apps/plugin-dialog";
   import { app } from "../store.svelte";
   import { autofocus } from "../actions";
   import Modal from "./Modal.svelte";
@@ -50,7 +49,15 @@
             <button
               class="btn ghost sm danger-text"
               onclick={async () => {
-                if (await confirm(`Delete tag "${tag.name}"?`))
+                if (
+                  await app.confirm({
+                    title: `Delete tag "${tag.name}"?`,
+                    details:
+                      "The tag reference is removed from the repository. The commit it pointed to stays in history.",
+                    confirmLabel: "Delete",
+                    danger: true,
+                  })
+                )
                   app.deleteTag(tag.name);
               }}>Delete</button
             >

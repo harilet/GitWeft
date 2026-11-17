@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { confirm } from "@tauri-apps/plugin-dialog";
   import { app, type ViewKey } from "$lib/store.svelte";
+  import TitleBar from "$lib/components/TitleBar.svelte";
+  import Confirm from "$lib/components/Confirm.svelte";
   import Welcome from "$lib/components/Welcome.svelte";
   import Changes from "$lib/components/Changes.svelte";
   import History from "$lib/components/History.svelte";
@@ -10,21 +11,42 @@
   import Settings from "$lib/components/Settings.svelte";
   import AiPanel from "$lib/components/AiPanel.svelte";
   import ConflictResolver from "$lib/components/ConflictResolver.svelte";
-  import DiffView from "$lib/components/DiffView.svelte";
-  import BranchSwitcher from "$lib/components/BranchSwitcher.svelte";
-  import TitleBar from "$lib/components/TitleBar.svelte";
+import DiffView from "$lib/components/DiffView.svelte";
+import BranchSwitcher from "$lib/components/BranchSwitcher.svelte";
 
-  const currentBranch = $derived(app.branches.find((b) => b.isHead));
-  const toolbarRemote = $derived(
-    app.remotes.find(
-      (r) =>
-        currentBranch?.upstream === r.name ||
-        currentBranch?.upstream?.startsWith(r.name + "/"),
-    )?.name ??
-      app.remotes[0]?.name ??
-      null,
-  );
-  const cannotPush = $derived(!app.repo || app.repo.detached || app.repo.unborn);
+const currentBranch = $derived(app.branches.find((b) => b.isHead));
+const toolbarRemote = $derived(
+  app.remotes.find(
+    (r) =>
+      currentBranch?.upstream === r.name ||
+      currentBranch?.upstream?.startsWith(r.name + "/"),
+  )?.name ??
+    app.remotes[0]?.name ??
+    null,
+);
+const cannotPush = $derived(!app.repo || app.repo.detached || app.repo.unborn);
+
+async function pushCurrent() {
+  const branch = app.repo?.branch;
+  const remote = toolbarRemote;
+  if (!branch || !remote) return;
+  const ahead = app.repo?.ahead ?? 0;
+  const parts = [
+    ahead > 0
+      ? `${ahead} commit${ahead === 1 ? "" : "s"} will be published to ${remote}/${branch}.`
+      : `Publishes ${branch} to ${remote}/${branch}.`,
+    currentBranch?.upstream ? null : "This also sets upstream tracking.",
+  ].filter(Boolean);
+  if (
+    await app.confirm({
+      title: `Push ${branch} to ${remote}?`,
+      details: parts.join(" "),
+      confirmLabel: "Push",
+      danger: false,
+    })
+  )
+    app.push(remote, branch, !currentBranch?.upstream);
+}
 
   const nav: { key: ViewKey; label: string; count: () => string }[] = [
     { key: "changes", label: "Changes", count: () => app.status.length.toString() },
@@ -83,19 +105,12 @@
               <button
                 class="btn sm"
                 disabled={cannotPush}
-                onclick={async () => {
-                  const branch = app.repo?.branch ?? "current branch";
-                  if (
-                    await confirm(
-                      `Push ${branch} to ${toolbarRemote ?? "remote"}?`,
-                    )
-                  )
-                    app.push(
-                      toolbarRemote,
-                      app.repo?.branch ?? null,
-                      !currentBranch?.upstream,
-                    );
-                }}>Push</button
+                title={
+                  currentBranch?.upstream
+                    ? `Push to ${currentBranch.upstream}`
+                    : "Push and set upstream"
+                }
+                onclick={pushCurrent}>Push</button
               >
             {/if}
             <button
@@ -208,6 +223,8 @@
     {/if}
   </div>
 {/if}
+
+<Confirm />
 
 {#if app.settingsOpen}
   <Settings />
