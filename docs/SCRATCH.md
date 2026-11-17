@@ -105,6 +105,12 @@ backlog is closed.
 
 ## Decisions
 
+- 2026-11-17 — The diff panel is view-scoped: the `AppStore.view` setter
+  and the session-side conflict jumps (merge/pull) clear `diff` and
+  `selectedCommit` when the view changes. Why: a working-tree or commit
+  diff shown over a different view's content is misleading context, which
+  the user explicitly hit; re-opening is one click and per-session state
+  (switching project tabs and back) still remembers its panel.
 - 2026-11-17 — Error toasts get friendly phrasing with the raw detail kept
   only in the error log (`notifyError` splits toast text from logged
   detail; `notify("…", "error")` still logs what it shows). Why: the toast
@@ -155,7 +161,10 @@ backlog is closed.
   `autoRefresh` on `visibilitychange` (the poll skips while hidden, so
   refocusing would otherwise show stale data), with `Ctrl/Cmd+R` as the
   manual override. Why: automation covers "sooner" better than a button
-  the shortcut already duplicated.
+  the shortcut already duplicated. Fetch came back on request as a split
+  control: Pull keeps the primary spot and a caret dropdown lists
+  per-remote Fetch (plus "Fetch all remotes" with several remotes),
+  instead of a third always-visible button.
 - 2026-11-11 — Poll failures are silent except for one error-log entry per
   outage. Why: a repo unreachable offline or deleted externally must not toast
   every 30 seconds.
@@ -196,6 +205,27 @@ backlog is closed.
   requested doc flow while giving agents one current source.
 
 ## Session log
+
+### 2026-11-17 — Diff panel scoping + collapsible diff files
+
+- `store.svelte.ts`: the `AppStore.view` setter clears the session's `diff`
+  and `selectedCommit` on view change; the session-side conflict jumps in
+  `merge()`/`pull()` clear `diff` when moving to Changes. Rationale: a
+  working-tree or commit diff over other views' content is misleading.
+- `DiffView.svelte`: each parsed file header is now a full-width toggle
+  button (▸/▾ chevron, `aria-expanded`) with per-file +N/−N counts in the
+  green/red palette; the body (including hunk headers and meta rows) is
+  skipped while collapsed — a real DOM cut on large multi-file commits.
+  Collapse state lives in a `SvelteSet` keyed by file header and clears
+  whenever the patch changes (new commit/working diff). One svelte-check
+  lesson: `{@const}` is only valid directly under block roots, so the
+  stats const moved from the header button's children into the `{#each}`.
+- Also in this session: Fetch returned to the toolbar as a Pull-attached
+  dropdown (per-remote entries + "Fetch all remotes", Esc/backdrop close,
+  menu ARIA), and the toolbar Refresh button was replaced by a
+  `visibilitychange` immediate refresh (details in Decisions).
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  impeccable detector clean. No Rust changes.
 
 ### 2026-11-17 — Final critique round: row actions, keyboard system, idiom, edges
 

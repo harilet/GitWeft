@@ -25,9 +25,16 @@ const toolbarRemote = $derived(
     app.remotes[0]?.name ??
     null,
 );
-const cannotPush = $derived(!app.repo || app.repo.detached || app.repo.unborn);
+  const cannotPush = $derived(!app.repo || app.repo.detached || app.repo.unborn);
 
-async function pushCurrent() {
+  let fetchOpen = $state(false);
+
+  function doFetch(remote: string | null) {
+    fetchOpen = false;
+    app.fetch(remote);
+  }
+
+  async function pushCurrent() {
   const branch = app.repo?.branch;
   const remote = toolbarRemote;
   if (!branch || !remote) return;
@@ -78,6 +85,10 @@ async function pushCurrent() {
   ];
 
   function onkey(e: KeyboardEvent) {
+    if (e.key === "Escape" && fetchOpen) {
+      fetchOpen = false;
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === ",") {
       e.preventDefault();
       app.settingsOpen = true;
@@ -130,8 +141,9 @@ async function pushCurrent() {
 
           <div class="tools">
           {#if app.remotes.length}
+            <div class="network">
               <button
-                class="btn sm"
+                class="btn sm network-pull"
                 title={currentBranch?.upstream
                   ? `Pull from ${currentBranch.upstream}`
                   : "Current branch has no upstream"}
@@ -139,17 +151,48 @@ async function pushCurrent() {
                 onclick={() => app.pull(null)}>Pull</button
               >
               <button
-                class="btn sm"
-                disabled={cannotPush}
-                title={
-                  currentBranch?.upstream
-                    ? `Push to ${currentBranch.upstream}`
-                    : "Push and set upstream"
-                }
-                onclick={pushCurrent}>Push</button
+                class="btn sm network-caret"
+                title="Fetch"
+                aria-haspopup="menu"
+                aria-expanded={fetchOpen}
+                onclick={() => (fetchOpen = !fetchOpen)}>▾</button
               >
-              <span class="divider" aria-hidden="true"></span>
-            {/if}
+              {#if fetchOpen}
+                <div
+                  class="backdrop"
+                  role="presentation"
+                  onclick={() => (fetchOpen = false)}
+                ></div>
+                <div class="network-menu" role="menu" aria-label="Fetch">
+                  {#each app.remotes as r (r.name)}
+                    <button
+                      class="menu-item"
+                      role="menuitem"
+                      onclick={() => doFetch(r.name)}>Fetch {r.name}</button
+                    >
+                  {/each}
+                  {#if app.remotes.length > 1}
+                    <button
+                      class="menu-item"
+                      role="menuitem"
+                      onclick={() => doFetch(null)}>Fetch all remotes</button
+                    >
+                  {/if}
+                </div>
+              {/if}
+            </div>
+            <button
+              class="btn sm"
+              disabled={cannotPush}
+              title={
+                currentBranch?.upstream
+                  ? `Push to ${currentBranch.upstream}`
+                  : "Push and set upstream"
+              }
+              onclick={pushCurrent}>Push</button
+            >
+            <span class="divider" aria-hidden="true"></span>
+          {/if}
             {#if !app.aiDisabled}
               <button
                 class="btn sm"
@@ -335,6 +378,58 @@ async function pushCurrent() {
     background: var(--border-strong);
     margin: 0 4px;
     flex: 0 0 auto;
+  }
+  .network {
+    position: relative;
+    display: inline-flex;
+    align-items: stretch;
+    flex: 0 0 auto;
+  }
+  .network-pull {
+    border-right: none;
+  }
+  .network-caret {
+    padding: 5px 8px;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+  .network-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 60;
+    min-width: 170px;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-color);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+  }
+  .menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-align: start;
+    cursor: pointer;
+  }
+  .menu-item:last-child {
+    border-bottom: none;
+  }
+  .menu-item:hover {
+    background: var(--hover-color);
+  }
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
   }
   .progress {
     max-width: 240px;

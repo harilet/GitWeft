@@ -728,7 +728,10 @@ export class RepoSession {
   async merge(name: string) {
     const res = await this.run(() => git.mergeBranch(this.path, name));
     await this.refreshAll();
-    if (this.conflicts.length > 0) this.view = "changes";
+    if (this.conflicts.length > 0) {
+      this.view = "changes";
+      this.diff = null;
+    }
     if (res !== null) {
       this.app.notify(res || `Merged ${name}`, "success");
     }
@@ -773,7 +776,10 @@ export class RepoSession {
       this.app.notify(res || "Pull complete", "success");
     }
     await this.refreshAll();
-    if (this.conflicts.length > 0) this.view = "changes";
+    if (this.conflicts.length > 0) {
+      this.view = "changes";
+      this.diff = null;
+    }
   }
 
   async push(remote: string | null, branch: string | null, setUpstream: boolean) {
@@ -978,7 +984,14 @@ class AppStore {
     return this.active?.view ?? "changes";
   }
   set view(v: ViewKey) {
-    if (this.active) this.active.view = v;
+    const session = this.active;
+    if (!session) return;
+    if (session.view === v) return;
+    session.view = v;
+    // The diff panel belongs to the view that opened it: a working-tree or
+    // commit diff never outlives its context, so switching views closes it.
+    session.diff = null;
+    session.selectedCommit = null;
   }
   get diff(): DiffTarget | null {
     return this.active?.diff ?? null;

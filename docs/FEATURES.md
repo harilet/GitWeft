@@ -70,12 +70,15 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
 - [x] Merge confirms with a preview: `get_merge_preview` counts commits that
       would land from the branch into HEAD ahead of the merge, so merging
       never fires without a themed confirm.
-- [x] Toolbar regroup: Pull/Push form the network group (Fetch lives in
-      Branches → Remotes; silent auto-fetch still covers opening), and a
-      divider separates network from app functions. There is no toolbar
-      refresh button: sessions poll every 30 seconds while the window is
-      visible, refresh immediately when the window is shown again, and
-      `Ctrl/Cmd+R` forces a manual refresh.
+- [x] Toolbar regroup: Pull/Push form the network group as a split control —
+      Pull plus a caret dropdown listing per-remote Fetch (and "Fetch all
+      remotes" with several remotes), Escape or an outside click closes it;
+      per-remote fetch also lives in Branches → Remotes, and silent
+      auto-fetch still covers opening; a divider separates network from
+      app functions. There is no toolbar refresh button: sessions poll
+      every 30 seconds while the window is visible, refresh immediately
+      when the window is shown again, and `Ctrl/Cmd+R` forces a manual
+      refresh.
 - [x] Clone progress is mirrored into the Welcome clone modal (live
       `git-progress` line), the dialog locks and disables inputs while
       cloning, and a failed clone keeps the entered URL/destination.
@@ -114,6 +117,13 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       dialog validates URL shape as you type (https/ssh/git@ or absolute
       path) before enabling Clone, and error toasts stay until dismissed
       (View log / ✕) while success and info toasts keep their timer.
+- [x] The diff panel is scoped to the view that opened it: switching views
+      (or returning to Changes after a merge/pull conflict) closes the
+      panel and the History selection, so a file or commit diff never
+      outlives its context.
+- [x] Diff files are collapsible: each file header toggles its body
+      (chevron, `aria-expanded`), shows green/red +N/−N change counts per
+      file, and collapse state resets when another commit is opened.
 
 ## In progress
 
