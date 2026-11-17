@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app, type ViewKey } from "$lib/store.svelte";
+  import type { FileStatus } from "$lib/api";
   import TitleBar from "$lib/components/TitleBar.svelte";
   import Confirm from "$lib/components/Confirm.svelte";
   import Welcome from "$lib/components/Welcome.svelte";
@@ -48,9 +49,17 @@ async function pushCurrent() {
     app.push(remote, branch, !currentBranch?.upstream);
 }
 
+  function changeCount(): string {
+    const isConflict = (f: FileStatus) => f.index === "U" || f.worktree === "U";
+    const rows =
+      app.staged.filter((f) => !isConflict(f)).length +
+      app.unstaged.filter((f) => !isConflict(f)).length +
+      app.conflicts.length;
+    return rows.toString();
+  }
+
   const nav: { key: ViewKey; label: string; count: () => string }[] = [
-    { key: "changes", label: "Changes", count: () => app.status.length.toString() },
-    
+    { key: "changes", label: "Changes", count: changeCount },
     { key: "history", label: "History", count: () => app.log.length.toString() },
     { key: "branches", label: "Branches", count: () => {
       const localBranches = app.branches.filter((b) => !b.isRemote);
@@ -93,7 +102,6 @@ async function pushCurrent() {
 
           <div class="tools">
             {#if app.remotes.length}
-              <button class="btn sm" onclick={() => app.fetch(null)}>Fetch</button>
               <button
                 class="btn sm"
                 title={currentBranch?.upstream
@@ -112,11 +120,13 @@ async function pushCurrent() {
                 }
                 onclick={pushCurrent}>Push</button
               >
+              <span class="divider" aria-hidden="true"></span>
             {/if}
             <button
-              class="btn sm"
-              onclick={() => app.refreshAll()}
-              title="Refresh (Ctrl+R)">Refresh</button
+              class="btn ghost icon"
+              title="Refresh (Ctrl+R)"
+              aria-label="Refresh"
+              onclick={() => app.refreshAll()}>↻</button
             >
             {#if !app.aiDisabled}
               <button
@@ -292,6 +302,13 @@ async function pushCurrent() {
     gap: 6px;
     flex-wrap: wrap;
   }
+  .divider {
+    width: 1px;
+    height: 18px;
+    background: var(--border-strong);
+    margin: 0 4px;
+    flex: 0 0 auto;
+  }
   .progress {
     max-width: 240px;
     overflow: hidden;
@@ -311,6 +328,15 @@ async function pushCurrent() {
   @keyframes spin {
     to {
       transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
     }
   }
 
@@ -470,11 +496,11 @@ async function pushCurrent() {
     background: var(--hover-color);
   }
   .toast.error {
-    border-color: #6e2a2a;
-    color: #ffdcd7;
+    border-color: #5a2a2f;
+    color: #ffd0cb;
   }
   .toast.success {
     border-color: #25452f;
-    color: #aff5b4;
+    color: var(--green);
   }
 </style>

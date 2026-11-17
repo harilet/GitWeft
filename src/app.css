@@ -146,6 +146,15 @@
   border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
   background: color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
+
+/* Danger-affordance text actions: red at rest, brighter on hover. */
+.danger-text {
+  color: var(--red);
+}
+.danger-text:hover {
+  color: #ffd0cb;
+  border-color: var(--red);
+}
 .btn.sm {
   padding: 5px 10px;
   font-size: 10px;
@@ -212,12 +221,33 @@ label.field > span {
   min-height: 38px;
 }
 
+/* One step above .label: the view title inside a panel head. */
+.view-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  color: var(--text-color);
+  white-space: nowrap;
+}
+
 .empty {
   padding: 16px 14px;
   color: var(--muted-color);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+}
+
+/* Empty state plus the one action that moves the user forward. */
+.empty-state {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+}
+.empty-state .empty {
+  padding: 0;
 }
 
 /* ---------- segmented control ---------- */

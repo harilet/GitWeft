@@ -4,24 +4,36 @@ Append dated entries, keep the top current, prune what is obvious from code.
 
 ## Current focus
 
-Step 1 of an impeccable design pass landed: all eight native `confirm()`
-dialogs (discard, delete/force-delete branch, abort merge, toolbar and
-per-remote push, remove remote, delete tag, drop stash) were replaced by a
-themed in-app `Confirm.svelte` dialog driven by a store-level confirm queue
-(`app.confirm()` returns a promise; concurrent asks settle in order). Each
-dialog names the action and the consequence, including untracked-file
-deletion on discard and ahead-count/upstream notes on push. The conflict
-resolver now saves a per-file `ConflictDraft` (choices, manual text, preview
-mode) in the repo session, restores it on reopen, and guards every close
-path (Esc, backdrop, ✕, Cancel) with a Cancel / Keep choices / Discard
-dialog while dirty. Remaining steps: distill, clarify, onboard+typeset,
-polish.
+The five-step impeccable pass is complete (harden, distill, clarify,
+onboard+typeset, polish). The polish sweep promoted one shared
+`.danger-text` (red at rest, brighter on hover) and deleted the three
+conflicting local definitions (Branches' muted-at-rest variant included),
+joined toast colors to the danger/badge palette, added a global
+`prefers-reduced-motion` query, fixed the nav-rail Changes count to mirror
+the rows actually displayed (staged + unstaged, conflicts de-duplicated,
+plus conflicts), and dropped the commit button's trailing space at 0 files.
+The keyboard/focus accessibility work from the critique remains parked by
+explicit user decision ("we don't use the keyboard much"); revisit if
+keyboard use becomes common.
 
 ## Next up
+
+- Smoke-test everything on the conflict fixture
+  (`/home/cyber/Documents/test/git conflicts`): themed confirms, resolver
+  collapse/progress, draft restore, merge preview, abort merge.
 
 - Smoke-test the themed confirms: discard an untracked file (copy says it is
   deleted), push with and without upstream, force-delete an unmerged branch
   and confirm the queued confirm flow when two asks overlap.
+- Smoke-test resolver collapse: choose sides on a multi-conflict file (use
+  `/home/cyber/Documents/test/git conflicts` — report.txt has two blocks)
+  and verify blocks collapse, the progress bar updates and reopening
+  restores the collapsed state; jumping to a search match inside a
+  collapsed block auto-expands it.
+- Smoke-test clarify: clone a small HTTPS repo and watch the modal progress
+  strip; trigger a network failure (wrong host) and confirm the friendly
+  toast, that the entered URL stays, and that the raw message lands in the
+  error log.
 - Smoke-test the conflict resolver search: type a term present only in one
   side, navigate matches across blocks and the whole file, and check the
   manual editor jump and gutter alignment on a long file.
@@ -37,6 +49,9 @@ polish.
   app scope and confirm repos with an enabled override keep their buttons.
 - Also exercise delete/modify and binary conflicts, plus Abort merge.
 - Pick the next feature from `docs/FEATURES.md` Ideas.
+- Parked: keyboard/focus accessibility (focus-visible, focus traps, row
+  action reveal on focus, aria-live toasts) — the user does not use the
+  keyboard much; do it if that changes.
 
 ## Known issues / watch-outs
 
@@ -84,6 +99,12 @@ polish.
 
 ## Decisions
 
+- 2026-11-17 — Error toasts get friendly phrasing with the raw detail kept
+  only in the error log (`notifyError` splits toast text from logged
+  detail; `notify("…", "error")` still logs what it shows). Why: the toast
+  lasts 4.5 seconds and should be readable, while the log preserves the
+  exact backend text for diagnosis. Mappings stay narrow: unmatched text
+  passes through unchanged.
 - 2026-11-17 — Native confirm dialogs were replaced by an in-app themed
   `Confirm.svelte` backed by a queue in the app store. Why: the stock OS
   dialogs broke the frameless shell at the highest-stress moments; a store
@@ -163,6 +184,89 @@ polish.
   requested doc flow while giving agents one current source.
 
 ## Session log
+
+### 2026-11-17 — Polish: shared danger affordance, palette, reduced motion
+
+- `app.css`: one shared `.danger-text` (red at rest, `#ffd0cb`+red border on
+  hover) replaces local definitions in Changes, ConflictResolver, Tags and
+  Stashes (identical red-at-rest) and Branches (was muted-at-rest — now
+  standardized); `.toast.error`/`.toast.success` re-joined to the danger
+  (`#5a2a2f`/`#ffd0cb`) and badge-green (`#25452f`/`--green`) palette.
+- `+page.svelte`: global `prefers-reduced-motion` query (transition and
+  animation kill) — the spinner from step 1's review point is included;
+  nav-rail Changes count now mirrors what Changes actually displays
+  (`changeCount()` deduplicates conflict files); toast colors updated.
+- `Changes.svelte`: commit button label is plain "Commit" at 0 files
+  (no trailing space).
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  `cargo test` 19 passed; `cargo clippy --all-targets` clean;
+  `cargo fmt --check` clean; detector on all changed UI files: no findings.
+  Critique snapshot auto-closed as stale (target changed since); the parked
+  keyboard/focus P0 is recorded under Next up.
+- Also fixed: a lost newline in Branches' `removeBranch` function head left
+  by the step-2 edit.
+
+### 2026-11-17 — Onboard + typeset: next-action empty states, view titles
+
+- `app.css`: `.empty-state` row (`.empty` + CTA chip inline) and
+  `.view-title` (13px / 700 / non-uppercase / 0.04em tracking).
+- `History.svelte`: the single "No commits yet" empty state split by cause —
+  filtered-empty shows "No commits match the filter" + "Clear filter"
+  (resets the local filter); a truly empty log shows "No commits yet" with
+  "Make your first commit" switching to Changes (CTA only when
+  `repo.unborn`). Head label uses `.view-title`.
+- `Branches.svelte`: empty local-branch list shows the first-commit CTA;
+  head label uses `.view-title`.
+- `Tags.svelte` / `Stashes.svelte`: head labels use `.view-title`; their
+  empty states keep plain text because their create affordances sit in the
+  adjacent header/create bar.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  impeccable detector on changed files: no findings. No Rust changes.
+
+### 2026-11-17 — Clarify: clone progress at the trigger + friendly errors
+
+- `errorlog.ts`: `errorDetail` (raw IPC message for the log) and
+  `friendlyError` (pattern mapping: credentials, network/timeout,
+  not-a-repository, name-already-exists; unmatched text passes through).
+  First attempt used a verbose `/x` regex flag that does not exist in
+  JavaScript — rewrote as plain patterns after svelte-check flagged 64
+  errors.
+- `store.svelte.ts`: `AppStore.notifyError(e)` (friendly toast + raw detail
+  into the log; notify/showToast split); all raw-backend catch sites
+  (run, runVoid, refreshAll, openConflict, sendAi, runGlobal) now call it;
+  `cloneRepo` returns the opened `RepoInfo` so callers can detect failure.
+- `Modal.svelte`: new `locked` prop disables ✕, backdrop click and Escape.
+- `Welcome.svelte`: clone modal shows a live progress strip
+  (`app.progress`), locks and disables inputs while cloning, and keeps the
+  entered URL/destination when the clone fails.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK.
+  Detector re-flagged the Welcome pinned-row stripe (false positive, judged
+  in the initial critique: functional ★-pair state marker). No Rust
+  changes, so `cargo` checks were not re-run.
+
+### 2026-11-17 — Distill: resolver density, merge preview, toolbar regroup
+
+- `src-tauri/src/git.rs`: new `MergePreview` struct + `get_merge_preview`
+  command using `graph_ahead_behind(HEAD, branch)` (commitsFromBranch =
+  would land, commitsOnHead = HEAD-only); unit test
+  `merge_preview_counts_side_commits` covers both directions.
+- `src-tauri/src/lib.rs`: registered `git::get_merge_preview`.
+- `src/lib/api.ts`: `MergePreview` type + `git.getMergePreview`.
+- `store.svelte.ts`: `RepoSession.mergePreview` + store proxy;
+  `ConflictDraft` gained `decided`/`collapsed` block-id arrays.
+- `ConflictResolver.svelte`: blocks collapse behind their header on explicit
+  choice (header keeps the choice control and shows a chosen badge, chevron
+  toggles); resolver bar gains a 3px accent progress bar with "N/M chosen";
+  drafts persist and restore the sets; `SvelteSet` mutation instead of
+  reassignment (fixes two svelte-check warnings).
+- `Branches.svelte`: Merge confirms with the preview summary ("Brings N
+  commit(s)…" / "already contained; no new commits").
+- `+page.svelte`: toolbar regrouped (Pull, Push, divider, ↻ icon, AI,
+  Settings); Fetch removed from the toolbar.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  `cargo test` 19 passed; `cargo clippy --all-targets` clean;
+  `cargo fmt --check` clean; impeccable detector on changed UI files: no
+  findings.
 
 ### 2026-11-17 — Themed confirms + conflict resolver state guard
 

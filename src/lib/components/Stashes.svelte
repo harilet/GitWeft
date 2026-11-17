@@ -12,7 +12,7 @@
 <div class="stashes">
   <header class="panel-head">
     <div class="titles">
-      <span class="label">Stashes</span>
+      <span class="label view-title">Stashes</span>
       <span class="label">{app.stashes.length} saved</span>
     </div>
   </header>
@@ -138,9 +138,8 @@
     gap: 2px;
     flex: 0 0 auto;
   }
-  .danger-text {
-    color: var(--muted-color);
-  }
+
+
   .danger-text:hover {
     color: var(--red);
     border-color: var(--red);

@@ -93,6 +93,11 @@ export interface BranchGraph {
   head: string;
 }
 
+export interface MergePreview {
+  commitsFromBranch: number;
+  commitsOnHead: number;
+}
+
 export interface BranchComparison {
   base: string;
   head: string;
@@ -187,6 +192,8 @@ export const git = {
     invoke<void>("checkout_branch", { repository, name }),
   mergeBranch: (repository: string, name: string) =>
     invoke<string>("merge_branch", { repository, name }),
+  getMergePreview: (repository: string, name: string) =>
+    invoke<MergePreview>("get_merge_preview", { repository, name }),
 
   listRemotes: (repository: string) => invoke<RemoteInfo[]>("list_remotes", { repository }),
   addRemote: (repository: string, name: string, url: string) =>

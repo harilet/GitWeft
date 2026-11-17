@@ -179,7 +179,7 @@
         disabled={committing || !app.commitMessage.trim() || staged.length === 0 || hasConflicts}
         onclick={submitCommit}
       >
-        {committing ? "Committing…" : `Commit ${staged.length || ""}`}
+        {committing ? "Committing…" : staged.length ? `Commit ${staged.length}` : "Commit"}
       </button>
       <span class="spacer"></span>
       <button
@@ -292,13 +292,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .danger-text {
-    color: var(--red);
-  }
-  .danger-text:hover {
-    color: #ffd0cb;
-    border-color: var(--red);
   }
   .file.conflict {
     border-left-color: var(--yellow);

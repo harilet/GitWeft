@@ -64,6 +64,31 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       per conflicted file while the merge is open; closing a dirty resolver
       offers Cancel / Keep choices / Discard instead of silently losing work,
       and reopening the file restores the saved state.
+- [x] Resolver density: blocks collapse behind their header once a side is
+      chosen (header keeps the choice control and a chosen badge, click to
+      re-expand), with a "N/M chosen" progress bar in the header bar.
+- [x] Merge confirms with a preview: `get_merge_preview` counts commits that
+      would land from the branch into HEAD ahead of the merge, so merging
+      never fires without a themed confirm.
+- [x] Toolbar regroup: Pull/Push form the network group (Fetch lives in
+      Branches → Remotes; silent auto-fetch still covers opening), Refresh
+      is an icon button, and a divider separates network from app functions.
+- [x] Clone progress is mirrored into the Welcome clone modal (live
+      `git-progress` line), the dialog locks and disables inputs while
+      cloning, and a failed clone keeps the entered URL/destination.
+- [x] Backend failures surface as friendly toasts (`friendlyError` mappings
+      for credentials, network, not-a-repository, name-taken), while the
+      full technical detail is kept in Settings → Error log.
+- [x] Dead-end empty states carry the next action: History distinguishes
+      "no commits yet" (jumps to Changes) from "no commits match the
+      filter" (clears the filter), and empty local branches link to the
+      first commit; view titles (History/Branches/Tags/Stashes) get one
+      type-size step above the microtype labels.
+- [x] Polish pass: one shared `.danger-text` (red at rest) replaces three
+      conflicting local definitions, toast colors join the danger/badge
+      palette, `prefers-reduced-motion` disables transitions and
+      animations, the nav-rail Changes count reflects the rows actually
+      displayed, and the commit label drops its trailing space at 0 files.
 
 ## In progress
 

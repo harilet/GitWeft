@@ -80,12 +80,32 @@
     )
       app.push(remoteName, branch, !trackedBy(remoteName));
   }
+
+  async function mergeIntoHead(name: string) {
+    const current = currentBranch?.name ?? "HEAD";
+    const preview = await app.mergePreview(name);
+    if (!preview) return;
+    const from = preview.commitsFromBranch;
+    const details =
+      from === 0
+        ? `${name} is already contained in ${current}; merging creates no new commits.`
+        : `Brings ${from} commit${from === 1 ? "" : "s"} from ${name} into ${current}. If both branches changed the same files, conflicts open in the resolver.`;
+    if (
+      await app.confirm({
+        title: `Merge ${name} into ${current}?`,
+        details,
+        confirmLabel: "Merge",
+        danger: false,
+      })
+    )
+      app.merge(name);
+  }
 </script>
 
 <div class="branches">
   <header class="panel-head">
     <div class="titles">
-      <span class="label">Branches</span>
+      <span class="label view-title">Branches</span>
       {#if tab === "branches"}
         <span class="label"
           >{app.localBranches.length} local &middot; {app.remoteBranches.length}
@@ -153,7 +173,7 @@
               <button class="btn ghost sm" onclick={() => app.checkout(b.name)}>
                 Checkout</button
               >
-              <button class="btn ghost sm" onclick={() => app.merge(b.name)}>
+              <button class="btn ghost sm" onclick={() => mergeIntoHead(b.name)}>
                 Merge</button
               >
               <button
@@ -166,7 +186,12 @@
           </div>
         </div>
       {:else}
-        <div class="empty">No local branches</div>
+        <div class="empty-state">
+          <span class="empty">No local branches</span>
+          <button class="btn ghost sm" onclick={() => (app.view = "changes")}
+            >Make your first commit</button
+          >
+        </div>
       {/each}
 
       {#if app.remoteBranches.length}
@@ -391,13 +416,6 @@
     align-items: center;
     gap: 2px;
     flex: 0 0 auto;
-  }
-  .danger-text {
-    color: var(--muted-color);
-  }
-  .danger-text:hover {
-    color: var(--red);
-    border-color: var(--red);
   }
   .remote-row {
     align-items: center;

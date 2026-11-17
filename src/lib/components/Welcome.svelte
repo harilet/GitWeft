@@ -32,11 +32,13 @@
   async function doClone() {
     if (!cloneUrl.trim() || !cloneDest.trim()) return;
     cloning = true;
-    await app.cloneRepo(cloneUrl.trim(), cloneDest.trim());
+    const info = await app.cloneRepo(cloneUrl.trim(), cloneDest.trim());
     cloning = false;
-    showClone = false;
-    cloneUrl = "";
-    cloneDest = "";
+    if (info) {
+      showClone = false;
+      cloneUrl = "";
+      cloneDest = "";
+    }
   }
 </script>
 
@@ -118,13 +120,14 @@
 </div>
 
 {#if showClone}
-  <Modal title="Clone repository" onclose={() => (showClone = false)}>
+  <Modal title="Clone repository" locked={cloning} onclose={() => (showClone = false)}>
     <label class="field">
       <span>Remote URL</span>
       <input
         class="input"
         placeholder="https://github.com/user/repo.git"
         bind:value={cloneUrl}
+        disabled={cloning}
         use:autofocus
       />
     </label>
@@ -135,12 +138,27 @@
           class="input"
           placeholder="/path/to/clone/into"
           bind:value={cloneDest}
+          disabled={cloning}
         />
-        <button class="btn" onclick={pickDestination}>Browse</button>
+        <button class="btn" disabled={cloning} onclick={pickDestination}
+          >Browse</button
+        >
       </div>
     </label>
+    {#if cloning}
+      <div class="clone-status">
+        <span class="label">Progress</span>
+        <span class="clone-line">
+          {app.progress ?? "Starting…"}
+        </span>
+      </div>
+    {/if}
     {#snippet footer()}
-      <button class="btn" onclick={() => (showClone = false)}>Cancel</button>
+      <button
+        class="btn"
+        disabled={cloning}
+        onclick={() => (showClone = false)}>Cancel</button
+      >
       <button
         class="btn primary"
         disabled={cloning || !cloneUrl.trim() || !cloneDest.trim()}
@@ -314,5 +332,26 @@
   }
   .action-row:hover .action-arrow {
     color: var(--primary-color);
+  }
+
+  .clone-status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-color);
+    margin-bottom: 8px;
+  }
+  .clone-status .label {
+    color: var(--primary-color);
+  }
+  .clone-line {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

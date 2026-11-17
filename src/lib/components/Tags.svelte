@@ -28,7 +28,7 @@
 <div class="tags">
   <header class="panel-head">
     <div class="titles">
-      <span class="label">Tags</span>
+      <span class="label view-title">Tags</span>
       <span class="label">{app.tags.length} total</span>
     </div>
     <button class="btn sm" onclick={() => (showCreate = true)}>New tag</button>
@@ -156,9 +156,8 @@
   .actions {
     flex: 0 0 auto;
   }
-  .danger-text {
-    color: var(--muted-color);
-  }
+
+
   .danger-text:hover {
     color: var(--red);
     border-color: var(--red);

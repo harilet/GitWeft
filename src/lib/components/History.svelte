@@ -50,7 +50,7 @@
 <div class="history">
   <header class="panel-head">
     <div class="titles">
-      <span class="label">History</span>
+      <span class="label view-title">History</span>
       <span class="label">{app.log.length} commits &middot; {app.branches.length} refs</span>
     </div>
     <div class="seg">
@@ -96,7 +96,23 @@
           <span class="time label">{relativeTime(commit.time)}</span>
         </div>
       {:else}
-        <div class="empty">No commits yet</div>
+        {#if filter.trim()}
+          <div class="empty-state">
+            <span class="empty">No commits match the filter</span>
+            <button class="btn ghost sm" onclick={() => (filter = "")}
+              >Clear filter</button
+            >
+          </div>
+        {:else}
+          <div class="empty-state">
+            <span class="empty">No commits yet</span>
+            {#if app.repo?.unborn}
+              <button class="btn ghost sm" onclick={() => (app.view = "changes")}
+                >Make your first commit</button
+              >
+            {/if}
+          </div>
+        {/if}
       {/each}
       {#if app.logHasMore}
         <button class="btn load-more" onclick={() => app.loadMoreLog()}>

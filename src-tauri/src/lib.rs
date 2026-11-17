@@ -32,6 +32,7 @@ pub fn run() {
             git::delete_branch,
             git::checkout_branch,
             git::merge_branch,
+            git::get_merge_preview,
             git::list_remotes,
             git::add_remote,
             git::remove_remote,

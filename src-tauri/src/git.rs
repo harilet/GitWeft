@@ -1281,6 +1281,44 @@ pub fn merge_branch(name: String, repository: String) -> Result<String, String> 
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePreview {
+    /// Commits reachable from the branch but not HEAD — what merging would land.
+    commits_from_branch: usize,
+    /// Commits reachable from HEAD but not the branch.
+    commits_on_head: usize,
+}
+
+fn merge_preview(repo: &Repository, name: &str) -> Result<MergePreview, String> {
+    let branch = repo
+        .find_branch(name, BranchType::Local)
+        .map_err(|e| e.message().to_string())?;
+    let branch_oid = branch
+        .get()
+        .target()
+        .ok_or_else(|| format!("Branch {name} has no target"))?;
+    let head_oid = repo
+        .head()
+        .ok()
+        .and_then(|h| h.target())
+        .ok_or_else(|| "The current branch has no commits yet".to_string())?;
+    let (on_head, from_branch) = repo
+        .graph_ahead_behind(head_oid, branch_oid)
+        .map_err(|e| e.message().to_string())?;
+    Ok(MergePreview {
+        commits_from_branch: from_branch,
+        commits_on_head: on_head,
+    })
+}
+
+#[tauri::command(async)]
+pub fn get_merge_preview(name: String, repository: String) -> Result<MergePreview, String> {
+    let p = PathBuf::from(&repository);
+    let repo = open(&p)?;
+    merge_preview(&repo, &name)
+}
+
 fn remote_entries(repo: &Repository) -> Result<Vec<RemoteInfo>, String> {
     let remotes = repo.remotes().map_err(err)?;
     let mut out = Vec::new();
@@ -1730,6 +1768,28 @@ mod tests {
         let path = t.path.to_string_lossy().to_string();
         assert!(merge_branch("feature".into(), path).is_err());
         t
+    }
+
+    #[test]
+    fn merge_preview_counts_side_commits() {
+        let t = init();
+        commit_file(&t.repo, "a.txt", "one");
+        let main = default_branch(&t.repo);
+        {
+            let head = t.repo.head().unwrap().peel_to_commit().unwrap();
+            t.repo.branch("feature", &head, false).unwrap();
+        }
+        t.repo.set_head("refs/heads/feature").unwrap();
+        commit_file(&t.repo, "b.txt", "two");
+        commit_file(&t.repo, "c.txt", "three");
+        t.repo.set_head(&format!("refs/heads/{main}")).unwrap();
+        commit_file(&t.repo, "d.txt", "main-ahead");
+
+        let preview = merge_preview(&t.repo, "feature").unwrap();
+        assert_eq!(preview.commits_from_branch, 2);
+        assert_eq!(preview.commits_on_head, 1);
+        let merged_in = merge_preview(&t.repo, &main).unwrap();
+        assert_eq!(merged_in.commits_from_branch, 0);
     }
 
     #[test]

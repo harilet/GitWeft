@@ -47,6 +47,44 @@ export function createError(message: string, repo?: string): ErrorLogEntry {
   };
 }
 
+/** The raw message behind an IPC rejection, for the error log. */
+export function errorDetail(e: unknown): string {
+  return (
+    (typeof e === "string" ? e : e instanceof Error ? e.message : String(e))
+      .trim() || "Unknown error"
+  );
+}
+
+/**
+ * Human-facing phrasing for common backend failures. The full technical text
+ * stays in the error log (Settings → Error log); only certain mappings are
+ * replaced, everything else passes through untouched.
+ */
+export function friendlyError(e: unknown): string {
+  const detail = errorDetail(e).toLowerCase();
+  if (
+    /(authentication failed|could not read username|permission denied|publickey|credential|invalid username or password)/.test(
+      detail,
+    )
+  ) {
+    return "The remote rejected this attempt — check your SSH agent or credential helper, then try again.";
+  }
+  if (
+    /(could not resolve host|connection (refused|reset|closed)|network is unreachable|timed? out|temporary failure in name resolution)/.test(
+      detail,
+    )
+  ) {
+    return "Could not reach the remote — check your connection, then try again.";
+  }
+  if (/(not a git repository|repository does not exist)/.test(detail)) {
+    return "That folder is not a Git repository.";
+  }
+  if (/\balready exists\b/.test(detail)) {
+    return "That name already exists here — pick another.";
+  }
+  return errorDetail(e);
+}
+
 export function formatTimestamp(ms: number): string {
   return new Date(ms).toLocaleString();
 }

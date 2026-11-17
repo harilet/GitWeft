@@ -7,6 +7,7 @@ import {
   type CommitInfo,
   type ConflictFile,
   type FileStatus,
+  type MergePreview,
   type RemoteInfo,
   type RepoInfo,
   type Snapshot,
@@ -22,8 +23,10 @@ import {
 } from "./recents";
 import {
   createError,
+  friendlyError,
   loadErrors,
   persistErrors,
+  errorDetail,
   type ErrorLogEntry,
 } from "./errorlog";
 import {
@@ -81,6 +84,10 @@ export interface ConflictDraft {
   path: string;
   content: string;
   choices: Record<number, ConflictChoice>;
+  /** Blocks the user explicitly chose a side for. */
+  decided: number[];
+  /** Blocks currently collapsed behind their header. */
+  collapsed: number[];
   manual: boolean;
   manualText?: string;
   showFullFile: boolean;
@@ -256,7 +263,7 @@ export class RepoSession {
       if (successMsg) this.app.notify(successMsg, "success");
       return result;
     } catch (e) {
-      this.app.notify(typeof e === "string" ? e : String(e), "error");
+      this.app.notifyError(e);
       return null;
     } finally {
       this.busy = false;
@@ -271,7 +278,7 @@ export class RepoSession {
       if (successMsg) this.app.notify(successMsg, "success");
       return true;
     } catch (e) {
-      this.app.notify(typeof e === "string" ? e : String(e), "error");
+      this.app.notifyError(e);
       return false;
     } finally {
       this.busy = false;
@@ -287,7 +294,7 @@ export class RepoSession {
         await git.getSnapshot(this.path, LOG_PAGE, this.graphIncludeRemote),
       );
     } catch (e) {
-      this.app.notify(typeof e === "string" ? e : String(e), "error");
+      this.app.notifyError(e);
     } finally {
       this.busy = false;
     }
@@ -450,7 +457,7 @@ export class RepoSession {
     try {
       this.conflict = await git.getConflict(this.path, path);
     } catch (e) {
-      this.app.notify(typeof e === "string" ? e : String(e), "error");
+      this.app.notifyError(e);
     } finally {
       this.conflictLoading = false;
     }
@@ -630,8 +637,8 @@ export class RepoSession {
             },
           ];
     } catch (e) {
-      const text = typeof e === "string" ? e : String(e);
-      this.app.notify(text, "error");
+      const text = errorDetail(e);
+      this.app.notifyError(e);
       this.aiEntries = [
         ...this.aiEntries,
         { id: ++this.aiEntrySeq, role: "assistant", content: `⚠ ${text}` },
@@ -726,6 +733,10 @@ export class RepoSession {
       this.app.notify(res || `Merged ${name}`, "success");
     }
     return res !== null;
+  }
+
+  async mergePreview(name: string): Promise<MergePreview | null> {
+    return this.run(() => git.getMergePreview(this.path, name));
   }
 
   async addRemote(name: string, url: string) {
@@ -1106,6 +1117,9 @@ class AppStore {
   merge(name: string) {
     return this.active?.merge(name);
   }
+  mergePreview(name: string) {
+    return this.active?.mergePreview(name);
+  }
   addRemote(name: string, url: string) {
     return this.active?.addRemote(name, url);
   }
@@ -1147,7 +1161,7 @@ class AppStore {
     try {
       return await fn();
     } catch (e) {
-      this.notify(typeof e === "string" ? e : String(e), "error");
+      this.notifyError(e);
       return null;
     } finally {
       this.globalBusy = false;
@@ -1207,13 +1221,27 @@ class AppStore {
       markFetched(info.path);
       await this.addSession(info);
     }
+    return info;
   }
 
   notify(text: string, kind: "info" | "error" | "success" = "info") {
     if (kind === "error") this.logError(text);
+    this.showToast(text, kind);
+  }
+
+  private showToast(
+    text: string,
+    kind: "info" | "error" | "success" = "info",
+  ) {
     this.toast = { kind, text };
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => (this.toast = null), 4500);
+  }
+
+  /** Friendly toast for a raw failure; the detailed text goes to the log. */
+  notifyError(e: unknown) {
+    this.logError(errorDetail(e));
+    this.showToast(friendlyError(e), "error");
   }
 
   logError(text: string) {

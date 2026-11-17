@@ -6,15 +6,18 @@
     onclose,
     children,
     footer,
+    locked = false,
   }: {
     title: string;
     onclose: () => void;
     children: Snippet;
     footer?: Snippet;
+    /** While true the dialog cannot be dismissed (long operation in flight). */
+    locked?: boolean;
   } = $props();
 
   function onkey(e: KeyboardEvent) {
-    if (e.key === "Escape") onclose();
+    if (e.key === "Escape" && !locked) onclose();
   }
 </script>
 
@@ -23,8 +26,8 @@
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div
   class="overlay"
-  onclick={onclose}
-  onkeydown={(e) => e.key === "Escape" && onclose()}
+  onclick={() => !locked && onclose()}
+  onkeydown={(e) => e.key === "Escape" && !locked && onclose()}
   role="presentation"
 >
   <div
@@ -38,7 +41,12 @@
       <div class="head-titles">
         <h3>{title}</h3>
       </div>
-      <button class="btn ghost icon" onclick={onclose} aria-label="Close">✕</button>
+      <button
+        class="btn ghost icon"
+        onclick={onclose}
+        disabled={locked}
+        aria-label="Close">✕</button
+      >
     </header>
     <div class="body">{@render children()}</div>
     {#if footer}
