@@ -206,6 +206,24 @@ backlog is closed.
 
 ## Session log
 
+### 2026-11-17 — Distill, density round: resolver whole-file menu, fetch fast path
+
+After the re-critique (31/40, Good), the user scoped one issue: resolver +
+toolbar density. The two P1 a11y findings (modal focus traps, aria-live)
+stay open in the snapshot for a later round.
+
+- `ConflictResolver.svelte`: the resolver bar's always-visible "Whole file"
+  label + three take/delete buttons became a single "Whole file ▾" dropdown
+  (per-side items keep their danger copy; menu ARIA plus Escape and an
+  outside-click backdrop close it; `takeSide` closes the menu before its
+  confirm). Per-block seg choices and the collapse/progress system are
+  untouched.
+- `+page.svelte`: the fetch caret is now a direct one-click Fetch when the
+  repo has a single remote (title names it, no menu ARIA); multi-remote
+  repos keep the menu. The single-remote "extra click" tax is gone.
+- Verified: `npm run check` 0 errors/0 warnings; `npm run build` OK;
+  detector clean. No Rust changes.
+
 ### 2026-11-17 — Diff panel scoping + collapsible diff files
 
 - `store.svelte.ts`: the `AppStore.view` setter clears the session's `diff`

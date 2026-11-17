@@ -66,13 +66,16 @@ Keep entries short; move shipped items from `docs/SCRATCH.md` into Shipped.
       and reopening the file restores the saved state.
 - [x] Resolver density: blocks collapse behind their header once a side is
       chosen (header keeps the choice control and a chosen badge, click to
-      re-expand), with a "N/M chosen" progress bar in the header bar.
+      re-expand), with a "N/M chosen" progress bar in the header bar, and
+      the whole-file take/delete actions open from a single "Whole file" 
+      dropdown instead of three always-visible buttons.
 - [x] Merge confirms with a preview: `get_merge_preview` counts commits that
       would land from the branch into HEAD ahead of the merge, so merging
       never fires without a themed confirm.
 - [x] Toolbar regroup: Pull/Push form the network group as a split control —
       Pull plus a caret dropdown listing per-remote Fetch (and "Fetch all
-      remotes" with several remotes), Escape or an outside click closes it;
+      remotes" with several remotes); with a single remote the caret is a
+      direct one-click Fetch. Escape or an outside click closes the menu;
       per-remote fetch also lives in Branches → Remotes, and silent
       auto-fetch still covers opening; a divider separates network from
       app functions. There is no toolbar refresh button: sessions poll

@@ -47,6 +47,7 @@
   let searchInput = $state<HTMLInputElement | null>(null);
   let rootEl = $state<HTMLDivElement | null>(null);
   let gutterEl = $state<HTMLDivElement | null>(null);
+  let wholeFileOpen = $state(false);
 
   const aiSuggestionHasMarkers = $derived(
     aiSuggestion !== null && hasConflictMarkers(aiSuggestion),
@@ -287,6 +288,7 @@
   async function takeSide(side: "ours" | "theirs" | "base") {
     const file = app.conflict;
     if (!file || saving) return;
+    wholeFileOpen = false;
     const deleting =
       (side === "ours" && !file.hasOurs) ||
       (side === "theirs" && !file.hasTheirs);
@@ -405,6 +407,10 @@
 
   function onkey(e: KeyboardEvent) {
     if (app.confirmActive) return;
+    if (e.key === "Escape" && wholeFileOpen) {
+      wholeFileOpen = false;
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
       if (conflict && !conflict.binary) {
         e.preventDefault();
@@ -503,28 +509,51 @@
               >
             {/if}
             <span class="spacer"></span>
-            <span class="label">Whole file</span>
-            <button
-              class="btn ghost sm"
-              class:danger-text={!conflict.hasOurs}
-              disabled={saving}
-              onclick={() => takeSide("ours")}
-              >{conflict.hasOurs ? "Take ours" : "Delete (ours)"}</button
-            >
-            <button
-              class="btn ghost sm"
-              class:danger-text={!conflict.hasTheirs}
-              disabled={saving}
-              onclick={() => takeSide("theirs")}
-              >{conflict.hasTheirs ? "Take theirs" : "Delete (theirs)"}</button
-            >
-            {#if conflict.hasBase}
+            <div class="whole-file">
               <button
                 class="btn ghost sm"
                 disabled={saving}
-                onclick={() => takeSide("base")}>Take base</button
+                aria-haspopup="menu"
+                aria-expanded={wholeFileOpen}
+                title="Resolve the whole file with one side"
+                onclick={() => (wholeFileOpen = !wholeFileOpen)}
               >
-            {/if}
+                Whole file ▾
+              </button>
+              {#if wholeFileOpen}
+                <div
+                  class="backdrop"
+                  role="presentation"
+                  onclick={() => (wholeFileOpen = false)}
+                ></div>
+                <div class="take-menu" role="menu" aria-label="Whole file actions">
+                  <button
+                    class="menu-item"
+                    class:danger-text={!conflict.hasOurs}
+                    role="menuitem"
+                    disabled={saving}
+                    onclick={() => takeSide("ours")}
+                    >{conflict.hasOurs ? "Take ours" : "Delete (ours)"}</button
+                  >
+                  <button
+                    class="menu-item"
+                    class:danger-text={!conflict.hasTheirs}
+                    role="menuitem"
+                    disabled={saving}
+                    onclick={() => takeSide("theirs")}
+                    >{conflict.hasTheirs ? "Take theirs" : "Delete (theirs)"}</button
+                  >
+                  {#if conflict.hasBase}
+                    <button
+                      class="menu-item"
+                      role="menuitem"
+                      disabled={saving}
+                      onclick={() => takeSide("base")}>Take base</button
+                    >
+                  {/if}
+                </div>
+              {/if}
+            </div>
           </div>
 
           <div class="search-bar">
@@ -933,6 +962,52 @@
     color: var(--muted-color);
     white-space: nowrap;
   }
+  .whole-file {
+    position: relative;
+    flex: 0 0 auto;
+    z-index: 1;
+  }
+  .take-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 60;
+    min-width: 160px;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface-color);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+  }
+  .take-menu .menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-align: start;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .take-menu .menu-item:last-child {
+    border-bottom: none;
+  }
+  .take-menu .menu-item:hover:not(:disabled) {
+    background: var(--hover-color);
+  }
+  .whole-file .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    cursor: default;
+  }
+
   .search-bar {
     display: flex;
     align-items: center;

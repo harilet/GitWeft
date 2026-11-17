@@ -152,10 +152,17 @@ const toolbarRemote = $derived(
               >
               <button
                 class="btn sm network-caret"
-                title="Fetch"
-                aria-haspopup="menu"
-                aria-expanded={fetchOpen}
-                onclick={() => (fetchOpen = !fetchOpen)}>▾</button
+                title={
+                  app.remotes.length === 1
+                    ? `Fetch ${app.remotes[0].name}`
+                    : "Fetch"
+                }
+                aria-haspopup={app.remotes.length > 1 ? "menu" : undefined}
+                aria-expanded={app.remotes.length > 1 ? fetchOpen : undefined}
+                onclick={() =>
+                  app.remotes.length === 1
+                    ? doFetch(app.remotes[0].name)
+                    : (fetchOpen = !fetchOpen)}>▾</button
               >
               {#if fetchOpen}
                 <div
